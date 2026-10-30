@@ -275,7 +275,7 @@
         if ((!pl || pl.suja || pl.q !== q) && (!pl || refeitas < 3) && performance.now() - inicio < this.orcamentoMs + 4) {
           const novo = this.montarPlaca(tx, ty, q, pl); if (novo) { pl = novo; this.placas.set(k, pl); refeitas++; } else if (!pl) faltam++;
         }
-        if (pl) { pl.visto = this.quadroN; ctx.drawImage(pl.cv, tx * PLACA, ty * PLACA, PLACA, PLACA); }
+        if (pl) { pl.visto = this.quadroN; const e = 2 / S; ctx.drawImage(pl.cv, tx * PLACA, ty * PLACA, PLACA + e, PLACA + e); } // sobra de 2 pontos: sem linha entre as placas
       }
       if (this.quadroN % 60 === 0) for (const [k, pl] of this.placas) if (this.quadroN - pl.visto > 200) this.placas.delete(k);
       for (const e of [...extras].sort((a, b) => a.y - b.y)) { ctx.setTransform(S, 0, 0, S, -cam.x * S, -cam.y * S); e.desenhar(); }
