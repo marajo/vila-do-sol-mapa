@@ -25,6 +25,7 @@
     branca: { vao: 54, alt: 36, poste: 7, cor: '#ece8de', trilhos: [[11, 5], [22, 5], [32, 5]], madeira: '#f1ede4', pintada: true },
     tabuas: { vao: 50, alt: 34, poste: 9, cor: '#6a4e33', madeira: '#7a5a3b' },
     tela: { vao: 44, alt: 42, poste: 5, cor: '#86735b', madeira: '#957f63' },
+    estacas: { vao: 48, alt: 30, poste: 6, cor: '#8a7356', madeira: '#a08a6a' }, // horta: estacas de madeira pontudas
   };
 
   function criar(L, U) {
@@ -34,6 +35,8 @@
       { id: 'ovelhas', cerca: 'branca', piso: 'pasto' },
       { id: 'porcos', cerca: 'tabuas', piso: 'lama' },
       { id: 'galinheiro', cerca: 'tela', piso: 'terreiro' },
+      { id: 'horta', cerca: 'estacas', piso: 'horta' },
+      { id: 'pomar', cerca: 'ripas', piso: 'pomar' },
     ];
     const currais = CONF.map((c, i) => {
       const l = L.lotes.find(x => x.id === c.id), est = L.estradas.find(e => e.lote === c.id), [gx, gy] = est.linha[est.linha.length - 1];
@@ -184,6 +187,7 @@
     }
 
     // ---------- arrumação de cada curral (posições relativas ao lote) ----------
+    const P = raiz.Plantas.criar(U);
     for (const cur of currais) {
       const { l } = cur, o = cur.objetos;
       if (cur.id === 'vacas') {
@@ -200,6 +204,15 @@
         o.push(cocho(l.x + 60, l.x + 230, l.y + 82, 'lavagem', true));
         o.push(bebedouro(l.x + 40, l.x + 150, l.y + l.h - 56));
         cur.lama = { cx: l.x + l.w * 0.48, cy: l.y + l.h * 0.62, rx: 120, ry: 72 };
+      } else if (cur.id === 'horta') { // canteiros dos dois lados do caminho de terra que sai da porteira
+        cur.caminhoY = cur.porteira.pos;
+        const cols = [[40, 210], [240, 410], [440, 610]], linhas = [[96, ['milho', 'girassol', 'tomate']], [178, ['abobora', 'couve', 'alface']], [316, ['cenoura', 'morango', 'alface']], [400, ['morango', 'cenoura', 'couve']]];
+        for (const [b, culturas] of linhas) cols.forEach(([a, c], i) => o.push(P.canteiro(l.x + a, l.x + c, l.y + b, culturas[i])));
+        o.push(P.espantalho(l.x + 600, l.y + 240));
+      } else if (cur.id === 'pomar') { // três fileiras de três árvores; o corredor da porteira fica livre
+        const especies = [['laranja', 'maca', 'manga'], ['manga', 'laranja', 'limao'], ['maca', 'manga', 'laranja']];
+        [190, 380, 570].forEach((b, j) => [110, 300, 600].forEach((a, i) => o.push(P.arvore(l.x + a, l.y + b, especies[j][i]))));
+        o.push(P.cesto(l.x + 520, l.y + 600));
       } else {
         o.push(casinha(l.x + 120, l.y + 176, { w: 150, d: 82, H: 50, h1: 32, madeira: '#e7dfcf', friso: '#9b3022', portaL: 26, portaA: 32, elevada: 24, ninhos: true }));
         o.push(comedouroTubo(l.x + 330, l.y + 214));
@@ -267,6 +280,10 @@
             for (let x = x1; x < x2; x += 8.4) { const j = r() * 4; g.fillStyle = degradeV(g, y - E.alt, y, [[0, tom(E.madeira, 1.1 - r() * 0.15)], [1, tom(E.madeira, 0.7)]]); g.fillRect(x, y - E.alt + 4 + j, 7.6, E.alt - 4 - j); }
             tabuaH(g, x1, x2, y - E.alt + 9, 6, E.cor);
             g.fillStyle = degradeV(g, y - 12, y, [[0, 'rgba(70,50,25,0)'], [1, 'rgba(70,50,25,.5)']]); g.fillRect(x1, y - 12, x2 - x1, 12);
+          } else if (p.cur.cerca === 'estacas') { // estacas pontudas e duas travessas
+            tabuaH(g, x1, x2, y - E.alt + 9, 3.5, E.madeira); tabuaH(g, x1, x2, y - 9, 3.5, E.madeira);
+            const r = sorteio(Math.round(x1 * 5 + y));
+            for (let x = x1 + 2; x < x2 - 1; x += 7) { const h = E.alt - 2 + (r() - 0.5) * 4; g.fillStyle = degradeH(g, x - 2.2, x + 2.2, [[0, tom(E.madeira, 1.15)], [1, tom(E.madeira, 0.72)]]); g.beginPath(); g.moveTo(x - 2.2, y); g.lineTo(x - 2.2, y - h + 3); g.lineTo(x, y - h); g.lineTo(x + 2.2, y - h + 3); g.lineTo(x + 2.2, y); g.closePath(); g.fill(); }
           } else { tela(g, x1, x2, y - E.alt + 3, y - 8); tabuaH(g, x1, x2, y - E.alt + 2, 4, E.madeira); tabuaH(g, x1, x2, y - 4, 8, E.madeira); }
         };
         if (!frente) tabuas();
@@ -282,6 +299,8 @@
         g.fillStyle = degradeH(g, x - larg / 2, x + larg / 2, [[0, tom(E.madeira, 1.15)], [1, tom(E.madeira, 0.72)]]); g.fillRect(x - larg / 2, y1 - h - t / 2, larg, y2 - y1 + t);
       } else if (p.cur.cerca === 'tabuas') {
         g.fillStyle = degradeH(g, x - larg / 2, x + larg / 2, [[0, tom(E.madeira, 1.1)], [1, tom(E.madeira, 0.68)]]); g.fillRect(x - larg / 2, y1 - E.alt + 4, larg, y2 - y1 + E.alt - 4);
+      } else if (p.cur.cerca === 'estacas') {
+        g.fillStyle = degradeH(g, x - 2.2, x + 2.2, [[0, tom(E.madeira, 1.1)], [1, tom(E.madeira, 0.7)]]); g.fillRect(x - 2.2, y1 - E.alt, 4.4, y2 - y1 + E.alt);
       } else { g.fillStyle = 'rgba(205,208,200,.55)'; g.fillRect(x - 0.8, y1 - E.alt + 3, 1.6, y2 - y1 + E.alt - 10); g.fillStyle = tom(E.madeira, 0.9); g.fillRect(x - 2, y1 - 8, 4, y2 - y1 + 8); }
       if (p.primeiro) poste2(x, y1, y1);
       poste2(x, y2, y2);
@@ -372,6 +391,17 @@
             }
           }
         }
+        if (cur.piso === 'horta') { // caminho de terra da porteira até o espantalho
+          g.lineCap = 'round';
+          for (const [w, c] of [[50, 'rgba(60,50,30,.5)'], [40, '#7a6443'], [30, '#8f7350']]) { g.strokeStyle = c; g.lineWidth = w; g.beginPath(); g.moveTo(l.x - 6, cur.caminhoY); g.lineTo(l.x + l.w - 50, cur.caminhoY + 6); g.stroke(); }
+          for (let i = 0; i < 90; i++) { g.fillStyle = r() < 0.5 ? 'rgba(60,45,25,.3)' : 'rgba(190,160,115,.3)'; g.beginPath(); g.ellipse(l.x + r() * (l.w - 50), cur.caminhoY - 12 + r() * 24, 1 + r() * 2, 0.8 + r() * 1.4, r() * 3, 0, 7); g.fill(); }
+        }
+        if (cur.piso === 'pomar') for (const o of cur.objetos) if (o.tipo === 'arvore') { // coroa de terra no pé, frutas caídas (embaixo da copa)
+          const x = (o.pegada[0] + o.pegada[2]) / 2, y = o.base - 3;
+          borrao(g, x, y, 44, 20, 'rgba(70,55,30,.45)', x); borrao(g, x, y, 34, 14, '#6e5a3c', y);
+          const F = { laranja: '#f39c1f', maca: '#c8312a', manga: '#f2b33d', limao: '#d8de3a' }[o.especie];
+          for (let i = 0; i < 6; i++) { g.fillStyle = F; g.beginPath(); g.arc(x - 40 + r() * 80, y - 8 + r() * 18, 3, 0, 7); g.fill(); g.fillStyle = 'rgba(255,255,255,.4)'; g.beginPath(); g.arc(x - 30.6 + r() * 60, y - 7 + r() * 14, 0.6, 0, 7); g.fill(); }
+        }
         for (const o of cur.objetos) { // terra pisada em volta dos equipamentos (no pasto)
           const [a, b, c, d] = o.pegada;
           if (cur.piso === 'pasto') { borrao(g, (a + c) / 2, d + 4, (c - a) / 2 + 30, (d - b) / 2 + 26, 'rgba(95,78,50,.55)', a); borrao(g, (a + c) / 2, d + 2, (c - a) / 2 + 16, (d - b) / 2 + 14, '#7a6443', b); }
@@ -386,6 +416,12 @@
         if (!dentro(cur, x, y, 2)) continue;
         if (cur.piso === 'lama') return 0;
         if (cur.piso === 'terreiro') return ruido(x / 34, y / 34, 31) > 0.64 ? 0.3 : 0;
+        if (cur.piso === 'horta') {
+          if (cur.objetos.some(o => perto(o, x, y) < 5)) return 0;
+          if (x < cur.l.x + cur.l.w - 44 && Math.abs(y - cur.caminhoY) < 15 + ruido(x / 20, y / 20, 39) * 8) return 0;
+          return 0.6;
+        }
+        if (cur.piso === 'pomar') { for (const o of cur.objetos) if (perto(o, x, y) < (o.tipo === 'arvore' ? 26 : 4) + ruido(x / 14, y / 14, 41) * 8) return 0; return 1; }
         let m = Math.hypot(x - cur.porteira.x, y - cur.porteira.y) - 30;
         for (const o of cur.objetos) m = Math.min(m, perto(o, x, y) - 10);
         const n = ruido(x / 23, y / 23, 33) * 16;
@@ -397,6 +433,8 @@
     function aparado(x, y) {
       let k = 1;
       for (const cur of currais) {
+        if (dentro(cur, x, y, -2) && cur.piso === 'horta') return 0.3;
+        if (dentro(cur, x, y, -2) && cur.piso === 'pomar') return 0.42 + 0.12 * ruido(x / 60, y / 60, 43);
         if (dentro(cur, x, y, -2)) return cur.piso === 'pasto' ? (cur.id === 'vacas' || cur.id === 'ovelhas' ? 0.22 : 0.32) + 0.12 * ruido(x / 60, y / 60, 35) : 0.38; // vacas: pasto bem rapado (aparecem as pernas)
         // por fora, o capim é roçado junto da cerca (a cerca aparece inteira)
         const l = cur.l, dx = Math.max(l.x - x, 0, x - l.x - l.w), dy = Math.max(l.y - y, 0, y - l.y - l.h), d = Math.hypot(dx, dy) + (ruido(x / 30, y / 30, 37) - 0.5) * 20;
@@ -424,11 +462,16 @@
       }
     }
     /** pedaços de cerca e equipamentos visíveis, prontos para entrar na ordem de profundidade da grama */
-    function extras(ctx, cam) {
+    function extras(ctx, cam, agora = 0) {
       const out = [], x0 = cam.x - 80, x1 = cam.x + cam.largura + 80, y0 = cam.y - 20, y1 = cam.y + cam.altura + 260;
       for (const o of objetos) {
         const [a, b, c] = o.caixa;
         if (c < x0 || a > x1 || o.base < y0 || b > y1) continue;
+        if (o.balanca) { // árvore: a copa balança a partir do pé (o tronco fica parado no chão)
+          const k = Math.sin(agora * 1.1 + o.caixa[0] * 0.013) * 0.022 + Math.sin(agora * 2.3 + o.base * 0.02) * 0.006;
+          out.push({ y: o.base, desenhar: () => { ctx.save(); ctx.transform(1, 0, k, 1, -k * o.base, 0); ctx.drawImage(o.cv, o.caixa[0], o.caixa[1], o.caixa[2] - o.caixa[0], o.caixa[3] - o.caixa[1]); ctx.restore(); } });
+          continue;
+        }
         out.push({ y: o.base, desenhar: () => ctx.drawImage(o.cv, o.caixa[0], o.caixa[1], o.caixa[2] - o.caixa[0], o.caixa[3] - o.caixa[1]) });
       }
       for (const cur of currais) {
@@ -447,14 +490,24 @@
     function mini(g) {
       for (const cur of currais) {
         const l = cur.l;
-        g.fillStyle = cur.piso === 'lama' ? '#6a5236' : cur.piso === 'terreiro' ? '#9a805e' : '#6f9038';
+        g.fillStyle = { lama: '#6a5236', terreiro: '#9a805e', horta: '#7a5f3f', pomar: '#5f8a35' }[cur.piso] || '#6f9038';
         g.fillRect(l.x, l.y, l.w, l.h);
         g.strokeStyle = '#f0e6cf'; g.lineWidth = 14; g.strokeRect(l.x, l.y, l.w, l.h);
         for (const o of cur.objetos) { const [a, b, c, d] = o.pegada; g.fillStyle = '#8d7a62'; g.fillRect(a, b, c - a, d - b); }
       }
     }
 
-    return { currais, CERCAS, capim, aparado, bloqueia, pintarChao, assar, extras, mini, dentro, perto, portao, atualizar, pontosPorteira, andavelDentro };
+    /** canteiro, árvore, espantalho ou cesto sob o ponto (para mostrar o nome) */
+    function objetoEm(x, y) {
+      let melhor = null, area = 1e12;
+      for (const o of objetos) {
+        if (!o.rotulo) continue;
+        const [a, b, c] = o.caixa;
+        if (x > a + 14 && x < c - 14 && y > b + 10 && y < o.base + 4 && (c - a) * (o.base - b) < area) { melhor = o; area = (c - a) * (o.base - b); }
+      }
+      return melhor;
+    }
+    return { currais, CERCAS, objetoEm, capim, aparado, bloqueia, pintarChao, assar, extras, mini, dentro, perto, portao, atualizar, pontosPorteira, andavelDentro };
   }
 
   raiz.Currais = { criar };

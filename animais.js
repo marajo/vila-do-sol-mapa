@@ -393,6 +393,7 @@
     }
     for (const cur of C.currais) {
       const tipo = espDe(cur), e = ESP[tipo];
+      if (!tipo) continue; // horta e pomar não têm bichos
       e.nomes.forEach((nome, i) => {
         const p = sortearPonto(cur, e) || [cur.l.x + cur.l.w / 2, cur.l.y + cur.l.h / 2];
         bichos.push({ tipo, e, cur, nome, var: e.vars[i], sem: 101 + bichos.length * 37, x: p[0], y: p[1], lado: i % 2 ? -1 : 1, vis: i % 2 ? -1 : 1, incl: 0, rumo: Math.random() * TAU, olhar: null,

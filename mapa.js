@@ -602,7 +602,9 @@
     dedos.delete(e.pointerId); tela.classList.remove('arrastando');
     if (gesto && gesto.tipo === 'arrasto' && !gesto.moveu && e.type === 'pointerup') {
       const wx = cam.x + e.clientX / cam.zoom, wy = cam.y + e.clientY / cam.zoom, pr = predioEm(wx, wy), bi = bichos.bichoEm(wx, wy), tb = equipe.em(wx, wy);
+      const ob = !tb && !bi ? C.objetoEm(wx, wy) : null;
       if (tb) avisar(equipe.descricao(tb));
+      else if (ob) avisar(ob.rotulo);
       else if (bi) { bichos.chamar(bi, agricultor.x); avisar(bichos.rotulo(bi)); }
       else if (pr) { if (pr.nivel < 3) mudarNivel(pr, pr.nivel + 1); else avisar(`${pr.nome} já está no nível máximo (3)`); }
       else {
@@ -822,7 +824,7 @@
       }
     if (quadros % 90 === 0) for (const [k, lad] of ladrilhos) if (quadros - lad.visto > 300) ladrilhos.delete(k);
     desenharAgua(cam, agora, dt);
-    const faltaCapim = grama.quadro(ctx, cam, agora, [...extraPonte, ...extrasPredios, ...C.extras(ctx, cam), ...bichos.extras(ctx, cam, agora), ...equipe.extras(ctx, cam, agora), extraAgricultor]);
+    const faltaCapim = grama.quadro(ctx, cam, agora, [...extraPonte, ...extrasPredios, ...C.extras(ctx, cam, agora), ...bichos.extras(ctx, cam, agora), ...equipe.extras(ctx, cam, agora), extraAgricultor]);
     ctx.setTransform(S, 0, 0, S, -cam.x * S, -cam.y * S);
     sombras();
     particulas(dt, agora);
