@@ -20,9 +20,10 @@
 
   // ---------- casa e celeiro (nível 1 a 3) ----------
   const loteDe = id => lotes.find(l => l.id === id);
+  const jogo = Jogo.criar(); // moedas, XP, níveis e armazém (salvo à parte do jogo atual)
   const predios = [
-    { id: 'casa', nome: 'Casa', nivel: 1, espec: n => Construcoes.especCasa(n, loteDe('casa')) },
-    { id: 'celeiro', nome: 'Celeiro', nivel: 0, espec: n => Construcoes.especCeleiro(n, loteDe('celeiro')) },
+    { id: 'casa', nome: 'Casa', nivel: jogo.nivel('casa'), espec: n => Construcoes.especCasa(n, loteDe('casa')) },
+    { id: 'celeiro', nome: 'Celeiro', nivel: jogo.nivel('celeiro'), espec: n => Construcoes.especCeleiro(n, loteDe('celeiro')) },
   ];
   for (const p of predios) p.e = p.espec(p.nivel);
   // ---------- currais e animais ----------
@@ -520,7 +521,8 @@
   }
   const casaDaEquipe = () => { const e = predios.find(p => p.id === 'casa').e; return [e.porta[0], e.porta[1] + 20]; };
   const equipe = Trabalhadores.criar({ C, bichos, rota, gradeFora: () => custo, gradeDentro: () => custoDentro, livre: pontoLivre, casa: casaDaEquipe, grama, agora: () => ultimo / 1000,
-    imagem: pasta => { const i = new Image(); i.src = `../assets/pixellab-staff/${pasta}/sheet.png?v=46`; return i; } });
+    colheu: c => colheu(c),
+    imagem: pasta => { const i = new Image(); i.src = `equipe/${pasta}/sheet.png?v=46`; return i; } });
   const agricultor = equipe.agricultor; // o agricultor da equipe: cuida da horta e atende o clique no chão
 
   // ---------- tela, câmera e controles ----------
@@ -582,7 +584,7 @@
       if (tb) avisar(equipe.descricao(tb));
       else if (ob) avisar(ob.rotuloAgora ? ob.rotuloAgora(ultimo / 1000) : ob.rotulo);
       else if (bi) { bichos.chamar(bi, agricultor.x); avisar(bichos.rotulo(bi)); }
-      else if (pr) { if (pr.nivel < 3) mudarNivel(pr, pr.nivel + 1); else avisar(`${pr.nome} já está no nível máximo (3)`); }
+      else if (pr) { if (pr.id === 'celeiro' && pr.nivel > 0) abrirCeleiro(); else { selEvoluir.value = pr.id; atualizarBotoes(); const px = jogo.proximo(pr.id); avisar(px.max ? `${pr.nome}: nível 3 (máximo)` : `${pr.nome} nível ${pr.nivel} · evoluir por ${px.custo} moedas no painel`); } }
       else {
         const [ax, ay] = agricultor.visivel ? [agricultor.x, agricultor.y] : casaDaEquipe();
         if (!rota(ax, ay, wx, wy)) avisar('Ali não dá para andar.');
@@ -824,7 +826,7 @@
   /** curral, horta ou pomar muda de nível: cerca, chão, capim e grade de caminhar se refazem; bichos novos entram pela
    *  porteira; árvores novas do pomar nascem como mudas */
   const NOMES = { vacas: 'Curral das vacas', ovelhas: 'Curral das ovelhas', porcos: 'Chiqueiro', galinheiro: 'Galinheiro', horta: 'Horta', pomar: 'Pomar' };
-  function mudarCurral(id, n) {
+  function mudarCurral(id, n, silencio = false) {
     const de = C.nivel(id);
     if (n === de) return;
     const [a, b] = C.nivel(id, n, ultimo / 1000), cur = C.currais.find(c => c.id === id);
@@ -834,18 +836,94 @@
     for (const [k, lad] of ladrilhos) if (lad.tx * T < x1 && lad.tx * T + T > x0 && lad.ty * T < y1 && lad.ty * T + T > y0) ladrilhos.delete(k);
     recalcularCusto(x0, y0, x1, y1); montarCustoDentro();
     for (const t of equipe.equipe) if (t.visivel && t.cur !== cur && C.bloqueia(t.x, t.y)) { const f = C.pontosPorteira(cur).fora; t.x = f[0]; t.y = f[1]; t.caminho = null; }
+    if (silencio) { pintarMini(); return; }
     som.menu(n > de ? 'nivel' : 'fechar');
     pintarMini(); atualizarBotoes();
     const qtd = bichos.bichos.filter(x => x.cur === cur && x.ativo).length, itens = cur.objetos.filter(o => o.tipo === 'arvore' || o.tipo === 'canteiro').length;
     const conta = qtd ? `${qtd} animais` : id === 'horta' ? `${itens} canteiros` : `${itens} árvores`;
     avisar(n === 0 ? `${NOMES[id]}: terreno vazio (nível 0)` : de === 0 ? `${NOMES[id]} construído (nível ${n}): ${conta}` : `${NOMES[id]} ${n > de ? 'cresceu para' : 'voltou para'} o nível ${n}: ${conta}`);
   }
-  const selEvoluir = document.getElementById('selEvoluir'), bNiveis = [...document.querySelectorAll('.niveis [data-nivel]')];
-  const nivelDe = id => (predios.some(p => p.id === id) ? predios.find(p => p.id === id).nivel : C.nivel(id));
-  function atualizarBotoes() { for (const b of bNiveis) b.setAttribute('aria-pressed', String(nivelDe(selEvoluir.value) === +b.dataset.nivel)); }
-  for (const b of bNiveis) b.onclick = () => { const id = selEvoluir.value, n = +b.dataset.nivel; if (predios.some(p => p.id === id)) mudarNivel(predios.find(p => p.id === id), n); else mudarCurral(id, n); };
+  // ---------- jogo: evoluir pagando, colheita, celeiro ----------
+  const selEvoluir = document.getElementById('selEvoluir'), bEvoluir = document.getElementById('bEvoluir'), infoEvoluir = document.getElementById('infoEvoluir');
+  for (const op of selEvoluir.options) op.dataset.nome = op.textContent;
+  function atualizarBotoes() {
+    for (const op of selEvoluir.options) { const n = jogo.nivel(op.value); op.textContent = `${op.dataset.nome} · ${n ? 'nível ' + n : 'não construído'}`; }
+    const id = selEvoluir.value, px = jogo.proximo(id), n = jogo.nivel(id);
+    bEvoluir.disabled = !px.ok;
+    bEvoluir.textContent = px.max ? 'Nível máximo' : `${n ? 'Evoluir' : 'Construir'} · ${px.custo} 🪙`;
+    infoEvoluir.textContent = px.max ? '' : px.ok ? `Vai para o nível ${px.n}` : px.motivo;
+    atualizarHud();
+  }
+  bEvoluir.onclick = () => {
+    const id = selEvoluir.value, r = jogo.evoluir(id);
+    if (!r) { avisar(jogo.proximo(id).motivo); return; }
+    const pr = predios.find(p => p.id === id);
+    if (pr) mudarNivel(pr, r.n); else mudarCurral(id, r.n);
+    if (r.subiu) subiuNivel();
+    atualizarBotoes();
+  };
   selEvoluir.onchange = atualizarBotoes;
+  // o que estava construído no jogo salvo aparece pronto
+  queueMicrotask(() => { for (const id of ['horta', 'galinheiro', 'pomar', 'porcos', 'ovelhas', 'vacas']) if (jogo.nivel(id)) mudarCurral(id, jogo.nivel(id), true); }); // depois que o resto do mapa existe
+
+  const hudMoedas = document.getElementById('hudMoedas'), hudNivel = document.getElementById('hudNivel'), hudXp = document.getElementById('hudXp');
+  function atualizarHud() {
+    const e = jogo.estado;
+    hudMoedas.textContent = e.moedas.toLocaleString('pt-BR');
+    hudNivel.textContent = jogo.nivelJogador();
+    hudXp.style.width = jogo.xpNoNivel() + '%'; hudXp.parentElement.title = `${jogo.xpNoNivel()}/100 XP para o nível ${jogo.nivelJogador() + 1}`;
+  }
+  function subiuNivel() { setTimeout(() => som.menu('nivel'), 300); avisar(`Você chegou ao nível ${jogo.nivelJogador()}!`); }
+  /** o agricultor colheu um canteiro: 2 unidades vão para o armazém */
+  function colheu(c) {
+    const pr = Jogo.PRODUTOS[c.cultura]; if (!pr) return;
+    const subiu = jogo.guardar(c.cultura, 2);
+    flutuar(c.pegada ? (c.pegada[0] + c.pegada[2]) / 2 : agricultor.x, c.pegada ? c.pegada[1] : agricultor.y - 60, `+2 ${pr.icone}`);
+    if (subiu) subiuNivel();
+    atualizarBotoes(); if (!celeiroDlg.hidden) montarCeleiro();
+  }
+  // textos que sobem do mapa (+2 🌽, +120 🪙)
+  const flutuantes = [];
+  function flutuar(x, y, texto) { flutuantes.push({ x, y, texto, t: 0 }); }
+  function desenharFlutuantes(dt) {
+    for (let i = flutuantes.length - 1; i >= 0; i--) {
+      const f = flutuantes[i]; f.t += dt; if (f.t > 1.8) { flutuantes.splice(i, 1); continue; }
+      const a = Math.min(1, (1.8 - f.t) * 2), sx = (f.x - cam.x) * cam.zoom, sy = (f.y - cam.y) * cam.zoom - f.t * 30;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.font = '700 16px system-ui, sans-serif'; ctx.textAlign = 'center';
+      ctx.lineWidth = 4; ctx.strokeStyle = `rgba(28,34,18,${0.8 * a})`; ctx.strokeText(f.texto, sx, sy);
+      ctx.fillStyle = `rgba(255,248,224,${a})`; ctx.fillText(f.texto, sx, sy); ctx.textAlign = 'start';
+    }
+  }
+  // celeiro: armazém e venda
+  const celeiroDlg = document.getElementById('celeiroDlg'), celeiroLista = document.getElementById('celeiroLista'), celeiroInfo = document.getElementById('celeiroInfo'), bVenderTudo = document.getElementById('bVenderTudo');
+  function montarCeleiro() {
+    const e = jogo.estado, itens = Object.keys(e.armazem).filter(k => e.armazem[k] > 0 && Jogo.PRODUTOS[k]), aberto = jogo.nivel('celeiro') > 0;
+    celeiroInfo.textContent = !aberto ? 'Construa o celeiro (painel Evoluir) para vender. A colheita fica guardada até lá.'
+      : `Celeiro nível ${jogo.nivel('celeiro')}${jogo.bonusVenda() > 1 ? ` · vende ${Math.round((jogo.bonusVenda() - 1) * 100)}% mais caro` : ''}`;
+    celeiroLista.replaceChildren(...(itens.length ? itens.map(k => {
+      const pr = Jogo.PRODUTOS[k], n = e.armazem[k], li = document.createElement('li');
+      li.innerHTML = `<span class="ic">${pr.icone}</span><span class="nm">${pr.nome}<small>${jogo.precoVenda(k)} 🪙 cada</small></span><b>× ${n}</b>`;
+      const b = document.createElement('button'); b.textContent = `Vender · ${n * jogo.precoVenda(k)} 🪙`; b.disabled = !aberto;
+      b.onclick = () => vender(k); li.append(b); return li;
+    }) : [Object.assign(document.createElement('li'), { className: 'vazio', textContent: 'Armazém vazio. A colheita da horta vem para cá.' })]));
+    const total = itens.reduce((t, k) => t + e.armazem[k] * jogo.precoVenda(k), 0);
+    bVenderTudo.textContent = `Vender tudo · ${total} 🪙`; bVenderTudo.disabled = !aberto || !total;
+  }
+  function vender(k) {
+    const g = jogo.vender(k); if (!g) return;
+    som.menu('moedas'); avisar(`Vendido por ${g} moedas`);
+    const pr = predios.find(p => p.id === 'celeiro'); flutuar(pr.e.porta[0], pr.e.porta[1] - 70, `+${g} 🪙`);
+    montarCeleiro(); atualizarBotoes();
+  }
+  bVenderTudo.onclick = () => vender(null);
+  function abrirCeleiro(abrir = true) { celeiroDlg.hidden = !abrir; if (abrir) montarCeleiro(); setTimeout(() => som.menu(abrir ? 'abrir' : 'fechar'), 0); }
+  document.getElementById('bCeleiro').onclick = () => abrirCeleiro(celeiroDlg.hidden);
+  document.getElementById('bFecharCeleiro').onclick = () => abrirCeleiro(false);
+  addEventListener('keydown', e => { if (e.key === 'Escape' && !celeiroDlg.hidden) abrirCeleiro(false); });
+  setInterval(() => jogo.salvar(), 15000);
+  addEventListener('pagehide', () => jogo.salvar());
   atualizarBotoes();
+  if (jogo.origem === 'importado') setTimeout(() => avisar(`Trouxemos do jogo atual: ${jogo.estado.moedas} moedas e o seu nível`), 1500);
   /** construção sob o ponto (tela tocada), pelo desenho e não só pela planta */
   function predioEm(wx, wy) {
     return predios.find(({ e }) => wx > e.caixa[0] + 24 && wx < e.caixa[2] - 24 && wy > e.caixa[1] + 40 && wy < e.base);
@@ -902,6 +980,7 @@
     particulas(dt, agora);
     clima.desenhar(ctx, cam, S, dpr, cssW, cssH, dt, agora); ctx.setTransform(S, 0, 0, S, -cam.x * S, -cam.y * S);
     equipe.rotulos(ctx, cam.zoom);
+    desenharFlutuantes(dt);
     if (mostrarLotes) desenharLotes();
     if (aviso && performance.now() < avisoAte) {
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.font = '600 15px system-ui, sans-serif'; ctx.textAlign = 'center';
@@ -923,7 +1002,7 @@
 
   // para conferir no console / testes
   window.prototipoMapa = {
-    cam, grama, agricultor, rota, centrar, ajustarZoom, ladrilhos, equipe, bichos, currais: C, som, clima, get pronto() { return pronto; }, get gasto() { return gasto; },
+    cam, grama, agricultor, rota, centrar, ajustarZoom, ladrilhos, equipe, bichos, currais: C, som, clima, jogo, get pronto() { return pronto; }, get gasto() { return gasto; },
     /** desenha n quadros seguidos e espera a placa de vídeo terminar (getImageData): ms por quadro de verdade */
     medir(n = 20) { const i = performance.now(); for (let k = 0; k < n; k++) { desenharQuadro(ultimo + 33.4); ctx.getImageData(0, 0, 1, 1); } return (performance.now() - i) / n; },
   };

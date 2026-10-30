@@ -23,7 +23,27 @@
     .niveis button[aria-pressed="true"] { background: #f0b04a; }
     #mini { right: 12px; bottom: 12px; width: 250px; height: 144px; padding: 0; cursor: pointer; touch-action: none; }
     #medidor { left: 12px; bottom: 12px; padding: 5px 9px; font: 11px ui-monospace, Consolas, monospace; opacity: .85; }
-    #relogio { top: 12px; right: 12px; padding: 5px 11px; font-size: 13px; font-variant-numeric: tabular-nums; }
+    #hud { top: 12px; right: 12px; padding: 6px 12px; display: flex; gap: 14px; align-items: center; font-size: 13px; font-variant-numeric: tabular-nums; }
+    #hud b { font-size: 14px; }
+    #hud .barra { display: inline-block; vertical-align: middle; width: 60px; height: 6px; border-radius: 3px; background: rgba(255,255,255,.18); overflow: hidden; margin-left: 3px; }
+    #hud .barra i { display: block; height: 100%; width: 0; background: #b7d574; transition: width .4s; }
+    .niveis .evoluir { width: auto !important; padding: 0 10px; background: #f0b04a !important; }
+    .niveis .evoluir:disabled { background: #8a8670 !important; cursor: default; }
+    .niveis .info { width: 100%; opacity: .75; font-size: 11px; min-height: 13px; }
+    .dlg { top: 50%; left: 50%; transform: translate(-50%, -50%); width: min(360px, calc(100vw - 32px)); max-height: calc(100vh - 32px); overflow: auto; padding: 12px 16px 14px; z-index: 5; background: rgba(28, 34, 18, .94); }
+    .dlg[hidden] { display: none; }
+    .dlg header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+    .dlg header b { font-size: 16px; }
+    .dlg header button { font: inherit; font-size: 15px; width: 30px; height: 30px; border: 0; border-radius: 50%; background: #e9e1bf; color: #2b2a17; cursor: pointer; }
+    #celeiroInfo { display: block; opacity: .75; margin-bottom: 8px; }
+    #celeiroLista { list-style: none; margin: 0 0 10px; padding: 0; display: grid; gap: 6px; }
+    #celeiroLista li { display: grid; grid-template-columns: 28px 1fr auto auto; gap: 8px; align-items: center; background: rgba(255,245,210,.07); border-radius: 9px; padding: 6px 8px; }
+    #celeiroLista li.vazio { display: block; opacity: .7; text-align: center; padding: 14px; }
+    #celeiroLista .ic { font-size: 20px; }
+    #celeiroLista small { display: block; opacity: .65; font-size: 11px; }
+    #celeiroLista button, .dlg .grande { font: inherit; font-size: 12px; border: 0; border-radius: 999px; padding: 5px 10px; background: #b7d574; color: #22301a; cursor: pointer; }
+    .dlg .grande { width: 100%; font-size: 14px; padding: 8px; font-weight: 600; background: #f0b04a; }
+    #celeiroLista button:disabled, .dlg .grande:disabled { background: #8a8670; cursor: default; }
     #opcoes { top: 50%; left: 50%; transform: translate(-50%, -50%); width: min(340px, calc(100vw - 32px)); max-height: calc(100vh - 32px); overflow: auto; padding: 12px 16px 14px; z-index: 5; background: rgba(28, 34, 18, .94); }
     #opcoes[hidden] { display: none; }
     #opcoes header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
@@ -46,7 +66,8 @@
       .botoes button { font-size: 11px; padding: 4px 8px; }
       #mini { width: 170px; height: 98px; right: 6px; bottom: 6px; }
       #medidor { left: 6px; bottom: 6px; }
-      #relogio { top: 6px; right: 6px; font-size: 11px; padding: 4px 8px; }
+      #hud { top: 6px; right: 6px; font-size: 11px; padding: 4px 8px; gap: 8px; }
+      #hud .barra { width: 36px; }
     }
   </style>
 </head>
@@ -61,20 +82,31 @@
       <button id="bLonge" aria-pressed="false">Ver mais longe</button>
       <button id="bAgricultor">Achar o agricultor</button>
       <button id="bEquipe">Chamar a equipe</button>
+      <button id="bCeleiro">Celeiro</button>
       <button id="bOpcoes" aria-expanded="false" aria-controls="opcoes">Opções</button>
     </div>
     <div class="niveis">
-      <label for="selEvoluir">Evoluir</label>
+      <label for="selEvoluir">Construir</label>
       <select id="selEvoluir" aria-label="O que evoluir">
         <option value="casa">Casa</option><option value="celeiro">Celeiro</option>
         <option value="vacas">Curral das vacas</option><option value="ovelhas">Curral das ovelhas</option><option value="porcos">Chiqueiro</option><option value="galinheiro">Galinheiro</option>
         <option value="horta">Horta</option><option value="pomar">Pomar</option>
       </select>
-      <button data-nivel="0" aria-label="Nível 0: terreno vazio" title="Terreno vazio">0</button><button data-nivel="1" aria-label="Nível 1">1</button><button data-nivel="2" aria-label="Nível 2">2</button><button data-nivel="3" aria-label="Nível 3">3</button>
+      <button id="bEvoluir" class="evoluir"></button><small id="infoEvoluir" class="info"></small>
     </div>
-    <small class="ajuda">Arraste para andar pelo mapa · roda do mouse ou pinça para zoom · clique no chão e o agricultor vai até lá (depois volta para a horta) · a equipe sai de casa e cuida dos animais sozinha · clique num animal ou trabalhador para ver o nome · escolha o que evoluir e o nível (protótipo: sem custo de moedas)</small>
+    <small class="ajuda">Arraste para andar pelo mapa · roda do mouse ou pinça para zoom · clique no chão e o agricultor vai até lá (depois volta para a horta) · a equipe sai de casa e cuida dos animais sozinha · clique num animal ou trabalhador para ver o nome · a colheita da horta vai para o celeiro, onde você vende · use as moedas para construir e evoluir</small>
   </div>
-  <div id="relogio" class="caixa" aria-live="off"></div>
+  <div id="hud" class="caixa">
+    <span class="moedas" title="Moedas">🪙 <b id="hudMoedas">0</b></span>
+    <span class="nivel">Nível <b id="hudNivel">1</b> <span class="barra"><i id="hudXp"></i></span></span>
+    <span id="relogio" aria-live="off"></span>
+  </div>
+  <section id="celeiroDlg" class="caixa dlg" hidden aria-label="Celeiro">
+    <header><b>Celeiro</b><button id="bFecharCeleiro" aria-label="Fechar celeiro">✕</button></header>
+    <small id="celeiroInfo"></small>
+    <ul id="celeiroLista"></ul>
+    <button id="bVenderTudo" class="grande"></button>
+  </section>
   <section id="opcoes" class="caixa" hidden aria-label="Opções">
     <header><b>Opções</b><button id="bFecharOpcoes" aria-label="Fechar opções">✕</button></header>
     <label class="linha"><input type="checkbox" id="somLigado"> Som ligado</label>
@@ -92,15 +124,16 @@
   <canvas id="mini" class="caixa" aria-label="Mapa inteiro: toque para ir até um lugar"></canvas>
   <div id="medidor" class="caixa"></div>
   <div id="carregando" class="caixa">Plantando o capim…</div>
-  <script src="layout.js?v=33"></script>
-  <script src="grama.js?v=33"></script>
-  <script src="construcoes.js?v=33"></script>
-  <script src="plantas.js?v=33"></script>
-  <script src="currais.js?v=33"></script>
-  <script src="animais.js?v=33"></script>
-  <script src="som.js?v=33"></script>
-  <script src="clima.js?v=33"></script>
-  <script src="trabalhadores.js?v=33"></script>
-  <script src="mapa.js?v=33"></script>
+  <script src="layout.js?v=35"></script>
+  <script src="grama.js?v=35"></script>
+  <script src="construcoes.js?v=35"></script>
+  <script src="plantas.js?v=35"></script>
+  <script src="currais.js?v=35"></script>
+  <script src="animais.js?v=35"></script>
+  <script src="jogo.js?v=35"></script>
+  <script src="som.js?v=35"></script>
+  <script src="clima.js?v=35"></script>
+  <script src="trabalhadores.js?v=35"></script>
+  <script src="mapa.js?v=35"></script>
 </body>
 </html>

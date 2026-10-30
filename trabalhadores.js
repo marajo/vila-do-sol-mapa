@@ -33,7 +33,7 @@
       let regas = 0;
       for (const c of canteiros) {
         const e = c.estagio(agora);
-        if (e === 3) lista.push({ ponto: frente(c), dur: 4, texto: `Colhendo ${nome(c)}`, depois: () => { c.plantado = null; } },
+        if (e === 3) lista.push({ ponto: frente(c), dur: 4, texto: `Colhendo ${nome(c)}`, depois: () => { c.plantado = null; if (o.colheu) o.colheu(c); } },
           { ponto: frente(c), dur: 3.5, texto: `Plantando ${nome(c)}`, depois: () => { c.plantado = o.agora(); } });
         else if (e === 0) lista.push({ ponto: frente(c), dur: 3.5, texto: `Plantando ${nome(c)}`, depois: () => { c.plantado = o.agora(); } });
         else if (regas < 2 && Math.random() < 0.5) { regas++; lista.push({ ponto: frente(c), dur: 3, texto: `Regando ${nome(c)}`, depois: () => { c.plantado -= c.dur * 0.08; } }); } // a rega adianta um pouco

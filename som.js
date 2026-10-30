@@ -133,6 +133,7 @@
       abrir(saida, t) { for (const [k, f] of [[0, 520], [1, 780]]) { const g = ac.createGain(); envelope(g, t + k * 0.07, 0.004, 0.03, 0.12, 0.3); oscila('triangle', t + k * 0.07, [[0, f]], g, 0.2); g.connect(saida); } },
       fechar(saida, t) { for (const [k, f] of [[0, 780], [1, 520]]) { const g = ac.createGain(); envelope(g, t + k * 0.07, 0.004, 0.03, 0.12, 0.3); oscila('triangle', t + k * 0.07, [[0, f]], g, 0.2); g.connect(saida); } },
       nivel(saida, t) { [523, 659, 784, 1047].forEach((f, k) => { const g = ac.createGain(); envelope(g, t + k * 0.09, 0.005, 0.06, 0.35, 0.3); oscila('triangle', t + k * 0.09, [[0, f]], g, 0.5); g.connect(saida); }); },
+      moedas(saida, t) { [1319, 1760, 2093].forEach((f, k) => { const g = ac.createGain(); envelope(g, t + k * 0.06, 0.002, 0.02, 0.25, 0.22); oscila('triangle', t + k * 0.06, [[0, f]], g, 0.3); g.connect(saida); }); },
       obra(saida, t) { const g = ac.createGain(); envelope(g, t, 0.005, 0.05, 0.4, 0.7); oscila('sine', t, [[0, 90], [0.3, 45]], g, 0.5); g.connect(saida); rajada(t, 1.1, saida, { tipo: 'lowpass', f: 700, pico: 0.35, ataque: 0.02 }); for (let k = 0; k < 10; k++) rajada(t + 0.1 + Math.random() * 0.9, 0.04, saida, { f: rnd(800, 2500), q: 3, pico: 0.15 }); },
     };
     function menu(tipo) { const s = noLugar('menu', null, null); if (s) MENU[tipo](s, ac.currentTime + 0.01); }
