@@ -55,7 +55,7 @@
       const dist = { oeste: Math.abs(gx - l.x), leste: Math.abs(gx - l.x - l.w), norte: Math.abs(gy - l.y), sul: Math.abs(gy - l.y - l.h) };
       const lado = Object.keys(dist).reduce((a, b) => (dist[a] < dist[b] ? a : b));
       const vertical = lado === 'oeste' || lado === 'leste';
-      return { ...c, l, nivel: 1, semente: 300 + i * 17, porteira: { lado, pos: vertical ? gy : gx, x: vertical ? (lado === 'oeste' ? l.x : l.x + l.w) : gx, y: vertical ? gy : (lado === 'norte' ? l.y : l.y + l.h) }, objetos: [], pecas: [] };
+      return { ...c, l, nivel: 0, semente: 300 + i * 17, porteira: { lado, pos: vertical ? gy : gx, x: vertical ? (lado === 'oeste' ? l.x : l.x + l.w) : gx, y: vertical ? gy : (lado === 'norte' ? l.y : l.y + l.h) }, objetos: [], pecas: [] };
     });
 
     // ---------- equipamentos ----------
@@ -212,8 +212,10 @@
     }
     // ---------- arrumação de cada curral por nível (posições relativas ao lote) ----------
     const P = raiz.Plantas.criar(U);
+    const VAZIO = 0.4; // sorteio que deixa o canteiro só com a terra preparada
     const agoraJogo = () => (typeof performance !== 'undefined' ? performance.now() / 1000 : 0);
     function montarObjetos(cur) {
+      if (cur.nivel === 0) { cur.objetos = []; cur.lama = null; return; } // nível 0: terreno vazio
       if (cur.id === 'pomar') return montarPomar(cur);
       const l = cur.l, o = (cur.objetos = []), n = cur.nivel, w = l.w, h = l.h;
       if (cur.id === 'vacas') {
@@ -233,11 +235,11 @@
       } else if (cur.id === 'horta') { // canteiros dos dois lados do caminho de terra que sai da porteira
         cur.caminhoY = cur.porteira.pos;
         const cols = [[40, 210], [240, 410], [440, 610]];
-        if (n === 1) { o.push(P.canteiro(l.x + 40, l.x + 300, l.y + 96, 'milho', agoraJogo()), P.canteiro(l.x + 40, l.x + 300, l.y + 216, 'cenoura', agoraJogo()), P.regador(l.x + 316, l.y + 146)); }
+        if (n === 1) { o.push(P.canteiro(l.x + 40, l.x + 300, l.y + 96, 'milho', agoraJogo(), VAZIO), P.canteiro(l.x + 40, l.x + 300, l.y + 216, 'cenoura', agoraJogo(), VAZIO), P.regador(l.x + 316, l.y + 146)); }
         else {
           const linhas = n === 2 ? [[96, ['milho', 'girassol', 'tomate']], [216, ['cenoura', 'morango', 'alface']]]
             : [[96, ['milho', 'girassol', 'tomate']], [178, ['abobora', 'couve', 'alface']], [316, ['cenoura', 'morango', 'alface']], [400, ['morango', 'cenoura', 'couve']]];
-          for (const [b, culturas] of linhas) cols.forEach(([a, c], i) => o.push(P.canteiro(l.x + a, l.x + c, l.y + b, culturas[i], agoraJogo())));
+          for (const [b, culturas] of linhas) cols.forEach(([a, c], i) => o.push(P.canteiro(l.x + a, l.x + c, l.y + b, culturas[i], agoraJogo(), VAZIO)));
           o.push(P.espantalho(l.x + 600, l.y + (n === 2 ? 146 : 240)), P.regador(l.x + 60, l.y + (n === 2 ? 148 : 246)));
         }
       } else { // galinheiro
@@ -254,6 +256,7 @@
     function montarCerca(cur) {
       const { l } = cur, E = CERCAS[cur.cerca];
       cur.pecas = [];
+      if (cur.nivel === 0) return;
       const lados = [['norte', l.x, l.y, l.x + l.w, l.y], ['sul', l.x, l.y + l.h, l.x + l.w, l.y + l.h], ['oeste', l.x, l.y, l.x, l.y + l.h], ['leste', l.x + l.w, l.y, l.x + l.w, l.y + l.h]];
       for (const [nome, ax, ay, bx, by] of lados) {
         const horiz = ay === by, comp = horiz ? bx - ax : by - ay;
@@ -392,6 +395,7 @@
     }
     function pintarChao(g, x0, y0, x1, y1) {
       for (const cur of currais) {
+        if (!cur.nivel) continue;
         const l = cur.l, r = sorteio(cur.semente + 1);
         if (l.x + l.w + 80 < x0 || l.x - 80 > x1 || l.y + l.h + 80 < y0 || l.y - 80 > y1) continue;
         if (cur.piso === 'lama' || cur.piso === 'terreiro') {
@@ -453,6 +457,7 @@
     /** multiplicador de nascer do capim (1 = normal) */
     function capim(x, y) {
       for (const cur of currais) {
+        if (!cur.nivel) continue;
         if (!dentro(cur, x, y, 2)) continue;
         if (cur.piso === 'lama') return 0;
         if (cur.piso === 'terreiro') return ruido(x / 34, y / 34, 31) > 0.64 ? 0.3 : 0;
@@ -470,8 +475,10 @@
     }
     /** pasto pastejado: mais baixo dentro dos currais de vaca e ovelha */
     function aparado(x, y) {
+      // (nível 0 não tem pasto rapado nem roçado junto da cerca)
       let k = 1;
       for (const cur of currais) {
+        if (!cur.nivel) continue;
         if (dentro(cur, x, y, -2) && cur.piso === 'horta') return 0.3;
         if (dentro(cur, x, y, -2) && cur.piso === 'pomar') return 0.42 + 0.12 * ruido(x / 60, y / 60, 43);
         if (dentro(cur, x, y, -2)) return cur.piso === 'pasto' ? (cur.id === 'vacas' || cur.id === 'ovelhas' ? 0.22 : 0.32) + 0.12 * ruido(x / 60, y / 60, 35) : 0.38; // vacas: pasto bem rapado (aparecem as pernas)
@@ -481,7 +488,7 @@
       }
       return k;
     }
-    const bloqueia = (x, y) => currais.some(cur => dentro(cur, x, y, 14));
+    const bloqueia = (x, y) => currais.some(cur => cur.nivel > 0 && dentro(cur, x, y, 14));
 
     // ---------- desenho: equipamentos assados, cercas vetoriais ----------
     function assarUm(o, q, estagio) {
@@ -524,7 +531,7 @@
       }
       for (const cur of currais) {
         const l = cur.l;
-        if (l.x + l.w + 20 < x0 || l.x - 20 > x1 || l.y + l.h < y0 || l.y - 60 > y1) continue;
+        if (!cur.nivel || l.x + l.w + 20 < x0 || l.x - 20 > x1 || l.y + l.h < y0 || l.y - 60 > y1) continue;
         for (const p of cur.pecas) {
           const yb = Math.max(p.a[1], p.b[1]);
           if (Math.max(p.a[0], p.b[0]) < x0 || Math.min(p.a[0], p.b[0]) > x1 || yb < y0 || yb - 60 > y1) continue;
@@ -537,6 +544,12 @@
     }
     function mini(g) {
       for (const cur of currais) {
+        if (!cur.nivel) { // terreno reservado (tracejado), ainda sem nada
+          const m = LOTES[cur.id][3];
+          g.setLineDash([60, 40]); g.lineWidth = 16; g.strokeStyle = 'rgba(255,248,220,.85)'; g.fillStyle = 'rgba(255,248,220,.12)';
+          g.fillRect(m.x, m.y, m.w, m.h); g.strokeRect(m.x, m.y, m.w, m.h); g.setLineDash([]);
+          continue;
+        }
         const l = cur.l;
         g.fillStyle = { lama: '#6a5236', terreiro: '#9a805e', horta: '#7a5f3f', pomar: '#5f8a35' }[cur.piso] || '#6f9038';
         g.fillRect(l.x, l.y, l.w, l.h);
@@ -561,7 +574,7 @@
       const cur = currais.find(c => c.id === id);
       if (n === undefined) return cur.nivel;
       const antes = { ...cur.l }, tinha = new Set(cur.objetos.filter(o => o.tipo === 'arvore').map(o => o.pegada[0] + ',' + o.base));
-      cur.nivel = n; Object.assign(cur.l, LOTES[id][n]);
+      cur.nivel = n; Object.assign(cur.l, LOTES[id][Math.max(1, n)]);
       montarObjetos(cur); montarCerca(cur); cur.portao.ang = cur.portao.alvo = 0;
       for (const o of cur.objetos) if (o.tipo === 'arvore' && !tinha.has(o.pegada[0] + ',' + o.base)) o.nasce = agora;
       objetos.length = 0; for (const c of currais) objetos.push(...c.objetos);

@@ -72,8 +72,12 @@
       for (const t of equipe) {
         if (!t.atual) {
           if (t.passos.length) t.atual = t.passos.shift();
-          else if (!t.visivel) { t.espera -= dt; if (t.espera <= 0) { [t.x, t.y] = o.casa(); t.passos = roteiro(t); t.dir = 0; } continue; }
-          else if (t.voltar) { t.voltar = false; t.passos = roteiro(t).slice(1); continue; } // atendeu o chamado: volta para a rotina de onde está
+          else if (!t.visivel) {
+            t.espera -= dt;
+            if (t.espera <= 0) { if (!t.cur.nivel) { t.espera = 3; continue; } [t.x, t.y] = o.casa(); t.passos = roteiro(t); t.dir = 0; } // só sai quando o lugar dele existe
+            continue;
+          }
+          else if (t.voltar) { t.voltar = false; t.passos = t.cur.nivel ? roteiro(t).slice(1) : [{ tipo: 'andar', ate: o.casa(), grade: 'fora' }, { tipo: 'sumir' }]; continue; } // atendeu o chamado: volta para a rotina de onde está
           else continue;
         }
         const p = t.atual;

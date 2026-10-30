@@ -567,8 +567,8 @@
     }
     /** acerta quantos bichos o curral tem no nível dele; os novos entram pela porteira, quem ficou fora do curral menor volta para dentro */
     function ajustar(cur, entrar = false) {
-      const n = (QTD[cur.id] || [])[cur.nivel - 1];
-      if (n === undefined) return;
+      if (!QTD[cur.id]) return;
+      const n = cur.nivel ? QTD[cur.id][cur.nivel - 1] : 0; // nível 0: curral ainda não existe
       const pp = C.pontosPorteira(cur), lista = bichos.filter(b => b.cur === cur);
       const dx = pp.dentro[0] - pp.meio[0], dy = pp.dentro[1] - pp.meio[1], dl = Math.hypot(dx, dy) || 1;
       let fila = 0;

@@ -441,6 +441,8 @@
   }
   function especCeleiro(nivel, lote) {
     const base = lote.y + lote.h - 18, cx = lote.x + lote.w / 2, VERM = '#9b3022', BRANCO = '#efe9dc';
+    // nível 0: terreno vazio (o celeiro ainda não foi construído)
+    if (nivel === 0) return { tipo: 'celeiro', nivel: 0, vazio: true, base, semente: 700, pegadas: [], pegada: [cx - 1, base - 1, cx + 1, base], caixa: [cx - 1, base - 1, cx + 1, base], porta: [cx, base + 16], altura: 0 };
     let e;
     if (nivel === 1) e = { corpo: { cx, w: 180, d: 118, H: 92, h1: 62, h2: 0, paiol: true, madeira: '#7b5737', friso: '#4a3422', tabua: 12 } };
     else if (nivel === 2) e = { corpo: { cx, w: 252, d: 148, H: 110, h1: 56, h2: 38, madeira: VERM, friso: BRANCO, tabua: 11 } };

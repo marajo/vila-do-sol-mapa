@@ -22,7 +22,7 @@
   const loteDe = id => lotes.find(l => l.id === id);
   const predios = [
     { id: 'casa', nome: 'Casa', nivel: 1, espec: n => Construcoes.especCasa(n, loteDe('casa')) },
-    { id: 'celeiro', nome: 'Celeiro', nivel: 1, espec: n => Construcoes.especCeleiro(n, loteDe('celeiro')) },
+    { id: 'celeiro', nome: 'Celeiro', nivel: 0, espec: n => Construcoes.especCeleiro(n, loteDe('celeiro')) },
   ];
   for (const p of predios) p.e = p.espec(p.nivel);
   // ---------- currais e animais ----------
@@ -39,6 +39,7 @@
   /** calçada de pedras da casa e rampa de terra do celeiro, da porta até o pátio */
   function naEntrada(x, y) {
     for (const { e } of predios) {
+      if (e.vazio) continue;
       const [px, py] = e.porta, meia = e.tipo === 'casa' ? 20 : 34 + (y - py) * 0.5;
       if (y > py - 12 && y < patio.y0 + 40 && Math.abs(x - px) < meia) return true;
     }
@@ -206,6 +207,7 @@
 
   /** chão em volta da construção: terra batida, calçada de pedras (casa) ou rampa de terra (celeiro) até o pátio */
   function chaoDoPredio(g, e, x0, y0, x1, y1) {
+    if (e.vazio) return;
     const [a, b, c, d] = e.pegada, [px, py] = e.porta;
     if (c + 60 < x0 || a - 60 > x1 || d + 120 < y0 || b - 60 > y1) return;
     const casa = e.tipo === 'casa';
@@ -626,7 +628,7 @@
     C.mini(g);
     for (const l of livres) { g.fillRect(l.x, l.y, l.w, l.h); g.strokeRect(l.x, l.y, l.w, l.h); }
     g.setLineDash([]);
-    for (const { e } of predios) { const [x0, y0, x1, y1] = e.pegada; g.fillStyle = e.tipo === 'casa' ? '#b5562f' : '#9b3022'; g.fillRect(x0, y0, x1 - x0, y1 - y0); }
+    for (const { e } of predios) { if (e.vazio) continue; const [x0, y0, x1, y1] = e.pegada; g.fillStyle = e.tipo === 'casa' ? '#b5562f' : '#9b3022'; g.fillRect(x0, y0, x1 - x0, y1 - y0); }
     g.fillStyle = '#fff8e0'; g.font = 'bold 120px system-ui, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
     if (miniW > 200) for (const l of lotes) g.fillText(l.nome.replace('Curral das ', ''), l.x + l.w / 2, l.y + l.h / 2);
   }
@@ -664,6 +666,7 @@
   // ---------- casa e celeiro: imagem na resolução do zoom, crescimento, sombra, fumaça e poeira ----------
   const qPredio = () => (cam.escala <= 1.2 ? 2 : cam.escala <= 2.2 ? 3 : 4); // sempre acima da tela: nada pixelado
   function assar(p, q) {
+    if (p.e.vazio) { p.cv = null; p.cq = q; p.fumaca = []; return; }
     const [x0, y0, x1, y1] = p.e.caixa, c = document.createElement('canvas');
     c.width = Math.ceil((x1 - x0) * q); c.height = Math.ceil((y1 - y0) * q);
     const g = c.getContext('2d'); g.setTransform(q, 0, 0, q, -x0 * q, -y0 * q);
@@ -680,7 +683,8 @@
       const t = (agora - a.t0) / 1.4;
       if (t >= 1) p.anim = null;
       else {
-        if (t < 0.4) { const [o0, o1, o2, o3] = a.e.caixa; ctx.globalAlpha = 1 - t / 0.4; ctx.drawImage(a.cv, o0, o1, o2 - o0, o3 - o1); }
+        if (t < 0.4 && a.cv) { const [o0, o1, o2, o3] = a.e.caixa; ctx.globalAlpha = 1 - t / 0.4; ctx.drawImage(a.cv, o0, o1, o2 - o0, o3 - o1); }
+        if (!p.cv) { ctx.globalAlpha = 1; return; }
         const s = a.s0 + (1 - a.s0) * voltaSuave(t), cx = (p.e.pegada[0] + p.e.pegada[2]) / 2, by = p.e.base;
         ctx.globalAlpha = Math.min(1, t * 3.5);
         ctx.save(); ctx.translate(cx, by); ctx.scale(s, s); ctx.translate(-cx, -by);
@@ -688,13 +692,13 @@
         return;
       }
     }
-    ctx.drawImage(p.cv, x0, y0, x1 - x0, y1 - y0);
+    if (p.cv) ctx.drawImage(p.cv, x0, y0, x1 - x0, y1 - y0);
   }
   const extrasPredios = predios.map(p => ({ get y() { return p.e.base; }, desenhar: () => desenharPredio(p, ultimo / 1000) }));
   /** sombra no chão, a leste (sol a oeste-noroeste); escurece também o capim e quem passar por ela */
   function sombras() {
     for (const p of predios) {
-      if (p.anim) continue;
+      if (p.anim || p.e.vazio) continue;
       const [x0, y0, x1, y1] = p.e.pegada, h = p.e.altura, dx = h * 0.45, [c0, c1, c2] = p.e.caixa;
       if (x1 + dx < cam.x || x0 > cam.x + cam.largura) continue;
       ctx.save();
@@ -727,7 +731,7 @@
     }
   }
   function mudarNivel(p, n) {
-    if (n === p.nivel || n < 1 || n > 3) return;
+    if (n === p.nivel || n < (p.id === 'casa' ? 1 : 0) || n > 3) { if (p.id === 'casa' && n === 0) avisar('A casa já começa construída (nível 1)'); return; }
     const velho = { e: p.e, cv: p.cv }, agora = ultimo / 1000;
     p.nivel = n; p.e = p.espec(n); assar(p, qPredio());
     const a = velho.e.pegada, b = p.e.pegada;
@@ -738,12 +742,13 @@
     for (const [k, lad] of ladrilhos) if (lad.tx * T < x1 && lad.tx * T + T > x0 && lad.ty * T < y1 && lad.ty * T + T > y0) ladrilhos.delete(k);
     recalcularCusto(x0, y0, x1, y1); montarCustoDentro();
     for (const t of equipe.equipe) if (t.visivel && noPredio(t.x, t.y) < 8) { t.x = p.e.porta[0] + 40; t.y = p.e.porta[1] + 20; t.caminho = null; }
+    const z = b[2] - b[0] >= a[2] - a[0] ? b : a; // poeira onde a obra é maior (construindo ou desmanchando)
     for (let i = 0; i < 70; i++) {
-      const x = b[0] + Math.random() * (b[2] - b[0]);
-      poeira.push({ x, y: p.e.base - Math.random() * 20, vx: (x - (b[0] + b[2]) / 2) * 0.25 + (Math.random() - 0.5) * 30, vy: -14 - Math.random() * 26, vida: -Math.random() * 0.5, dura: 1.4 + Math.random() * 1.2, r: 9 + Math.random() * 14 });
+      const x = z[0] + Math.random() * (z[2] - z[0]);
+      poeira.push({ x, y: z[3] - 4 - Math.random() * 20, vx: (x - (z[0] + z[2]) / 2) * 0.25 + (Math.random() - 0.5) * 30, vy: -14 - Math.random() * 26, vida: -Math.random() * 0.5, dura: 1.4 + Math.random() * 1.2, r: 9 + Math.random() * 14 });
     }
     pintarMini(); atualizarBotoes();
-    avisar(`${p.nome} ${n > velho.e.nivel ? 'evoluiu para' : 'voltou para'} o nível ${n}`);
+    avisar(n === 0 ? `${p.nome}: terreno vazio (nível 0)` : `${p.nome} ${n > velho.e.nivel ? (velho.e.vazio ? 'construído:' : 'evoluiu para') : 'voltou para'} nível ${n}`);
   }
   /** curral, horta ou pomar muda de nível: cerca, chão, capim e grade de caminhar se refazem; bichos novos entram pela
    *  porteira; árvores novas do pomar nascem como mudas */
@@ -761,7 +766,7 @@
     pintarMini(); atualizarBotoes();
     const qtd = bichos.bichos.filter(x => x.cur === cur && x.ativo).length, itens = cur.objetos.filter(o => o.tipo === 'arvore' || o.tipo === 'canteiro').length;
     const conta = qtd ? `${qtd} animais` : id === 'horta' ? `${itens} canteiros` : `${itens} árvores`;
-    avisar(`${NOMES[id]} ${n > de ? 'cresceu para' : 'voltou para'} o nível ${n}: ${conta}`);
+    avisar(n === 0 ? `${NOMES[id]}: terreno vazio (nível 0)` : de === 0 ? `${NOMES[id]} construído (nível ${n}): ${conta}` : `${NOMES[id]} ${n > de ? 'cresceu para' : 'voltou para'} o nível ${n}: ${conta}`);
   }
   const selEvoluir = document.getElementById('selEvoluir'), bNiveis = [...document.querySelectorAll('.niveis [data-nivel]')];
   const nivelDe = id => (predios.some(p => p.id === id) ? predios.find(p => p.id === id).nivel : C.nivel(id));
