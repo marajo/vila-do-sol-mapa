@@ -770,24 +770,29 @@
     pintarMini(); atualizarBotoes();
     avisar(`${p.nome} ${n > velho.e.nivel ? 'evoluiu para' : 'voltou para'} o nível ${n}`);
   }
-  /** o pomar cresce (ou volta): cerca, chão, capim e grade de caminhar se refazem; as árvores novas nascem como mudas */
-  function mudarPomar(n) {
-    const de = C.nivelPomar();
+  /** curral, horta ou pomar muda de nível: cerca, chão, capim e grade de caminhar se refazem; bichos novos entram pela
+   *  porteira; árvores novas do pomar nascem como mudas */
+  const NOMES = { vacas: 'Curral das vacas', ovelhas: 'Curral das ovelhas', porcos: 'Chiqueiro', galinheiro: 'Galinheiro', horta: 'Horta', pomar: 'Pomar' };
+  function mudarCurral(id, n) {
+    const de = C.nivel(id);
     if (n === de) return;
-    const [a, b] = C.nivelPomar(n, ultimo / 1000);
+    const [a, b] = C.nivel(id, n, ultimo / 1000), cur = C.currais.find(c => c.id === id);
+    bichos.ajustar(cur, true);
     const x0 = Math.min(a.x, b.x) - 120, y0 = Math.min(a.y, b.y) - 200, x1 = Math.max(a.x + a.w, b.x + b.w) + 120, y1 = Math.max(a.y + a.h, b.y + b.h) + 80;
     grama.refazer(x0, y0, x1, y1);
     for (const [k, lad] of ladrilhos) if (lad.tx * T < x1 && lad.tx * T + T > x0 && lad.ty * T < y1 && lad.ty * T + T > y0) ladrilhos.delete(k);
     recalcularCusto(x0, y0, x1, y1); montarCustoDentro();
-    if (C.bloqueia(agricultor.x, agricultor.y)) { agricultor.x = 620; agricultor.y = 1090; agricultor.caminho = []; }
+    if (C.bloqueia(agricultor.x, agricultor.y)) { const f = C.pontosPorteira(cur).fora; agricultor.x = f[0]; agricultor.y = f[1]; agricultor.caminho = []; }
     pintarMini(); atualizarBotoes();
-    const arv = C.currais.find(c => c.id === 'pomar').objetos.filter(o => o.tipo === 'arvore').length;
-    avisar(`Pomar ${n > de ? 'cresceu para' : 'voltou para'} o nível ${n}: ${arv} árvores`);
+    const qtd = bichos.bichos.filter(x => x.cur === cur && x.ativo).length, itens = cur.objetos.filter(o => o.tipo === 'arvore' || o.tipo === 'canteiro').length;
+    const conta = qtd ? `${qtd} animais` : id === 'horta' ? `${itens} canteiros` : `${itens} árvores`;
+    avisar(`${NOMES[id]} ${n > de ? 'cresceu para' : 'voltou para'} o nível ${n}: ${conta}`);
   }
-  const bNiveis = [...document.querySelectorAll('[data-predio]')];
-  const nivelDe = id => (id === 'pomar' ? C.nivelPomar() : predios.find(p => p.id === id).nivel);
-  function atualizarBotoes() { for (const b of bNiveis) b.setAttribute('aria-pressed', String(nivelDe(b.dataset.predio) === +b.dataset.nivel)); }
-  for (const b of bNiveis) b.onclick = () => (b.dataset.predio === 'pomar' ? mudarPomar(+b.dataset.nivel) : mudarNivel(predios.find(p => p.id === b.dataset.predio), +b.dataset.nivel));
+  const selEvoluir = document.getElementById('selEvoluir'), bNiveis = [...document.querySelectorAll('.niveis [data-nivel]')];
+  const nivelDe = id => (predios.some(p => p.id === id) ? predios.find(p => p.id === id).nivel : C.nivel(id));
+  function atualizarBotoes() { for (const b of bNiveis) b.setAttribute('aria-pressed', String(nivelDe(selEvoluir.value) === +b.dataset.nivel)); }
+  for (const b of bNiveis) b.onclick = () => { const id = selEvoluir.value, n = +b.dataset.nivel; if (predios.some(p => p.id === id)) mudarNivel(predios.find(p => p.id === id), n); else mudarCurral(id, n); };
+  selEvoluir.onchange = atualizarBotoes;
   atualizarBotoes();
   /** construção sob o ponto (tela tocada), pelo desenho e não só pela planta */
   function predioEm(wx, wy) {

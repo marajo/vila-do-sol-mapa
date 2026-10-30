@@ -29,8 +29,9 @@
       const lista = [];
       const servir = { cocho: 'Enchendo o cocho de feno', comedouro: 'Enchendo o comedouro de milho' }[cocho.tipo];
       lista.push({ ponto: frente(cocho), dur: 4, texto: cur.id === 'porcos' ? 'Servindo a lavagem' : cur.id === 'ovelhas' ? 'Pondo feno no cocho' : servir, depois: () => bichos.chamarPara(cur, cocho) });
-      if (cur.id === 'galinheiro') {
-        const casa = objs.find(x => x.tipo === 'casinha'), ovos = 3 + Math.floor(Math.random() * 4);
+      const casa = cur.id === 'galinheiro' && objs.find(x => x.tipo === 'casinha');
+      if (casa) { // os ninhos só existem a partir do nível 2
+        const ovos = 3 + Math.floor(Math.random() * 4);
         lista.push({ ponto: [casa.pegada[2] - 14, casa.pegada[3] + 26], dur: 4, texto: `Recolhendo ${ovos} ovos` });
       }
       lista.push({ ponto: frente(agua), dur: 3, texto: cur.id === 'vacas' ? 'Limpando o bebedouro' : 'Trocando a água' });
@@ -72,8 +73,8 @@
           if (!t.caminho) {
             let alvo = p.ate;
             if (p.bicho) { // escolhe um animal em pé, segura ele parado e para ao lado dele
-              const opc = bichos.bichos.filter(b => b.cur === t.cur && !b.reservado && b.deit < 0.2);
-              const b = opc[Math.floor(Math.random() * opc.length)] || bichos.bichos.find(b => b.cur === t.cur);
+              const opc = bichos.bichos.filter(b => b.cur === t.cur && b.ativo && !b.reservado && b.deit < 0.2);
+              const b = opc[Math.floor(Math.random() * opc.length)] || bichos.bichos.find(b => b.cur === t.cur && b.ativo);
               bichos.reservar(b, true);
               const prox = t.passos[0]; if (prox && prox.tipo === 'tarefa') prox.bichoAlvo = b;
               alvo = [b.x, b.y + b.e.raio * 0.5 + 16];

@@ -17,8 +17,8 @@
     .botoes button { font: inherit; font-size: 12px; color: #2b2a17; background: #e9e1bf; border: 0; border-radius: 999px; padding: 5px 10px; cursor: pointer; }
     .botoes button[aria-pressed="true"] { background: #b7d574; }
     .niveis { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: 0 0 6px; font-size: 12px; }
-    .niveis span { margin: 0 2px 0 6px; opacity: .85; }
-    .niveis span:first-child { margin-left: 0; }
+    .niveis label { opacity: .85; }
+    .niveis select { font: inherit; font-size: 12px; border: 0; border-radius: 7px; padding: 3px 6px; background: #e9e1bf; color: #2b2a17; max-width: 150px; }
     .niveis button { font: inherit; font-weight: 700; width: 26px; height: 24px; border: 0; border-radius: 7px; background: #e9e1bf; color: #2b2a17; cursor: pointer; }
     .niveis button[aria-pressed="true"] { background: #f0b04a; }
     #mini { right: 12px; bottom: 12px; width: 250px; height: 144px; padding: 0; cursor: pointer; touch-action: none; }
@@ -48,22 +48,26 @@
       <button id="bEquipe">Chamar a equipe</button>
     </div>
     <div class="niveis">
-      <span>Casa</span><button data-predio="casa" data-nivel="1">1</button><button data-predio="casa" data-nivel="2">2</button><button data-predio="casa" data-nivel="3">3</button>
-      <span>Celeiro</span><button data-predio="celeiro" data-nivel="1">1</button><button data-predio="celeiro" data-nivel="2">2</button><button data-predio="celeiro" data-nivel="3">3</button>
-      <span>Pomar</span><button data-predio="pomar" data-nivel="1">1</button><button data-predio="pomar" data-nivel="2">2</button><button data-predio="pomar" data-nivel="3">3</button>
+      <label for="selEvoluir">Evoluir</label>
+      <select id="selEvoluir" aria-label="O que evoluir">
+        <option value="casa">Casa</option><option value="celeiro">Celeiro</option>
+        <option value="vacas">Curral das vacas</option><option value="ovelhas">Curral das ovelhas</option><option value="porcos">Chiqueiro</option><option value="galinheiro">Galinheiro</option>
+        <option value="horta">Horta</option><option value="pomar">Pomar</option>
+      </select>
+      <button data-nivel="1" aria-label="Nível 1">1</button><button data-nivel="2" aria-label="Nível 2">2</button><button data-nivel="3" aria-label="Nível 3">3</button>
     </div>
-    <small class="ajuda">Arraste para andar pelo mapa · roda do mouse ou pinça para zoom · clique no chão e o agricultor vai até lá · a equipe sai de casa e cuida dos animais sozinha · clique num animal ou trabalhador para ver o nome · clique na casa ou no celeiro para evoluir (protótipo: sem custo de moedas)</small>
+    <small class="ajuda">Arraste para andar pelo mapa · roda do mouse ou pinça para zoom · clique no chão e o agricultor vai até lá · a equipe sai de casa e cuida dos animais sozinha · clique num animal ou trabalhador para ver o nome · escolha o que evoluir e o nível (protótipo: sem custo de moedas)</small>
   </div>
   <canvas id="mini" class="caixa" aria-label="Mapa inteiro: toque para ir até um lugar"></canvas>
   <div id="medidor" class="caixa"></div>
   <div id="carregando" class="caixa">Plantando o capim…</div>
-  <script src="layout.js?v=27"></script>
-  <script src="grama.js?v=27"></script>
-  <script src="construcoes.js?v=27"></script>
-  <script src="plantas.js?v=27"></script>
-  <script src="currais.js?v=27"></script>
-  <script src="animais.js?v=27"></script>
-  <script src="trabalhadores.js?v=27"></script>
-  <script src="mapa.js?v=27"></script>
+  <script src="layout.js?v=29"></script>
+  <script src="grama.js?v=29"></script>
+  <script src="construcoes.js?v=29"></script>
+  <script src="plantas.js?v=29"></script>
+  <script src="currais.js?v=29"></script>
+  <script src="animais.js?v=29"></script>
+  <script src="trabalhadores.js?v=29"></script>
+  <script src="mapa.js?v=29"></script>
 </body>
 </html>

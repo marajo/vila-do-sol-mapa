@@ -40,13 +40,22 @@
     ];
     // pomar por nível: a porteira fica sempre no mesmo lugar (fim da trilha, x 620, y 1000) e o pomar cresce em volta
     const POMAR = { 1: { x: 440, y: 600, w: 360, h: 400 }, 2: { x: 180, y: 380, w: 800, h: 620 }, 3: { x: 80, y: 80, w: 1380, h: 920 } };
-    let nivelPomarAtual = 1, qAtual = 0;
+    const cheio = id => { const l = L.lotes.find(x => x.id === id); return { x: l.x, y: l.y, w: l.w, h: l.h }; };
+    const LOTES = {
+      pomar: POMAR,
+      vacas: { 1: { x: 3460, y: 1310, w: 450, h: 360 }, 2: { x: 3460, y: 1240, w: 700, h: 500 }, 3: cheio('vacas') },
+      ovelhas: { 1: { x: 2780, y: 2050, w: 360, h: 360 }, 2: { x: 2640, y: 2010, w: 500, h: 440 }, 3: cheio('ovelhas') },
+      porcos: { 1: { x: 3460, y: 2070, w: 360, h: 360 }, 2: { x: 3460, y: 2040, w: 500, h: 420 }, 3: cheio('porcos') },
+      galinheiro: { 1: { x: 4260, y: 520, w: 300, h: 260 }, 2: { x: 4200, y: 460, w: 420, h: 320 }, 3: cheio('galinheiro') },
+      horta: { 1: { x: 2510, y: 1270, w: 340, h: 260 }, 2: { x: 2510, y: 1270, w: 640, h: 260 }, 3: cheio('horta') },
+    };
+    let qAtual = 0;
     const currais = CONF.map((c, i) => {
-      const l = c.id === 'pomar' ? { id: 'pomar', ...POMAR[nivelPomarAtual] } : L.lotes.find(x => x.id === c.id), est = L.estradas.find(e => e.lote === c.id), [gx, gy] = est.linha[est.linha.length - 1];
+      const l = { id: c.id, ...LOTES[c.id][1] }, est = L.estradas.find(e => e.lote === c.id), [gx, gy] = est.linha[est.linha.length - 1];
       const dist = { oeste: Math.abs(gx - l.x), leste: Math.abs(gx - l.x - l.w), norte: Math.abs(gy - l.y), sul: Math.abs(gy - l.y - l.h) };
       const lado = Object.keys(dist).reduce((a, b) => (dist[a] < dist[b] ? a : b));
       const vertical = lado === 'oeste' || lado === 'leste';
-      return { ...c, l, semente: 300 + i * 17, porteira: { lado, pos: vertical ? gy : gx, x: vertical ? (lado === 'oeste' ? l.x : l.x + l.w) : gx, y: vertical ? gy : (lado === 'norte' ? l.y : l.y + l.h) }, objetos: [], pecas: [] };
+      return { ...c, l, nivel: 1, semente: 300 + i * 17, porteira: { lado, pos: vertical ? gy : gx, x: vertical ? (lado === 'oeste' ? l.x : l.x + l.w) : gx, y: vertical ? gy : (lado === 'norte' ? l.y : l.y + l.h) }, objetos: [], pecas: [] };
     });
 
     // ---------- equipamentos ----------
@@ -201,37 +210,42 @@
       o.push(P.cesto(meio + 70, l.y + l.h - 15), P.caixote(meio - 60, l.y + l.h - 25, '#f39c1f'));
       if (l.h > 400) { o.push(P.caixote(meio + 60, l.y + l.h - 230, '#c8312a')); o.push(P.escada(meio + 145, l.y + l.h - 316)); } // escada encostada na árvore à direita da alameda
     }
-    // ---------- arrumação de cada curral (posições relativas ao lote) ----------
+    // ---------- arrumação de cada curral por nível (posições relativas ao lote) ----------
     const P = raiz.Plantas.criar(U);
-    for (const cur of currais) {
-      const { l } = cur, o = cur.objetos;
+    function montarObjetos(cur) {
+      if (cur.id === 'pomar') return montarPomar(cur);
+      const l = cur.l, o = (cur.objetos = []), n = cur.nivel, w = l.w, h = l.h;
       if (cur.id === 'vacas') {
-        o.push(abrigo(l.x + l.w - 300, l.x + l.w - 40, l.y + 182, 118));
-        o.push(cocho(l.x + 120, l.x + 330, l.y + 118, 'feno'));
-        o.push(bebedouro(l.x + l.w - 270, l.x + l.w - 110, l.y + l.h - 60));
-        o.push(rolo(l.x + 560, l.y + l.h - 150, 24, 40));
+        if (n === 1) { o.push(cocho(l.x + 140, l.x + 300, l.y + 80, 'feno'), bebedouro(l.x + w - 170, l.x + w - 40, l.y + h - 34)); }
+        else if (n === 2) { o.push(abrigo(l.x + w - 260, l.x + w - 30, l.y + 150, 100), cocho(l.x + 120, l.x + 300, l.y + 90, 'feno'), bebedouro(l.x + w - 250, l.x + w - 100, l.y + h - 40)); }
+        else { o.push(abrigo(l.x + w - 300, l.x + w - 40, l.y + 182, 118), cocho(l.x + 120, l.x + 330, l.y + 118, 'feno'), bebedouro(l.x + w - 270, l.x + w - 110, l.y + h - 60), rolo(l.x + 560, l.y + h - 150, 24, 40)); }
       } else if (cur.id === 'ovelhas') {
-        o.push(casinha(l.x + 130, l.y + 156, { w: 168, d: 92, H: 58, h1: 40, madeira: '#9a7a54', friso: '#5a4230' }));
-        o.push(cocho(l.x + 330, l.x + 460, l.y + 96, 'feno'));
-        o.push(bebedouro(l.x + l.w - 160, l.x + l.w - 60, l.y + l.h - 56, true));
+        const aprisco = (x, b) => casinha(x, b, { w: 168, d: 92, H: 58, h1: 40, madeira: '#9a7a54', friso: '#5a4230' });
+        if (n === 1) o.push(cocho(l.x + 40, l.x + 170, l.y + 70, 'feno'), bebedouro(l.x + 40, l.x + 150, l.y + h - 36, true));
+        else if (n === 2) o.push(aprisco(l.x + 120, l.y + 150), cocho(l.x + 270, l.x + 400, l.y + 80, 'feno'), bebedouro(l.x + 60, l.x + 170, l.y + h - 40, true));
+        else o.push(aprisco(l.x + 130, l.y + 156), cocho(l.x + 330, l.x + 460, l.y + 96, 'feno'), bebedouro(l.x + w - 160, l.x + w - 60, l.y + h - 56, true));
       } else if (cur.id === 'porcos') {
-        o.push(casinha(l.x + l.w - 130, l.y + 140, { w: 172, d: 94, H: 50, h1: 36, madeira: '#7d5d3e', friso: '#4a3422', semJanela: true }));
-        o.push(cocho(l.x + 60, l.x + 230, l.y + 82, 'lavagem', true));
-        o.push(bebedouro(l.x + 40, l.x + 150, l.y + l.h - 56));
-        cur.lama = { cx: l.x + l.w * 0.48, cy: l.y + l.h * 0.62, rx: 120, ry: 72 };
+        const cabana = (x, b) => casinha(x, b, { w: 172, d: 94, H: 50, h1: 36, madeira: '#7d5d3e', friso: '#4a3422', semJanela: true });
+        if (n === 1) { o.push(cocho(l.x + 130, l.x + 290, l.y + 70, 'lavagem', true), bebedouro(l.x + 170, l.x + 290, l.y + h - 36)); cur.lama = { cx: l.x + w * 0.5, cy: l.y + h * 0.58, rx: 80, ry: 50 }; }
+        else if (n === 2) { o.push(cabana(l.x + w - 110, l.y + 130), cocho(l.x + 60, l.x + 220, l.y + 70, 'lavagem', true), bebedouro(l.x + 40, l.x + 150, l.y + h - 40)); cur.lama = { cx: l.x + w * 0.46, cy: l.y + h * 0.62, rx: 100, ry: 60 }; }
+        else { o.push(cabana(l.x + w - 130, l.y + 140), cocho(l.x + 60, l.x + 230, l.y + 82, 'lavagem', true), bebedouro(l.x + 40, l.x + 150, l.y + h - 56)); cur.lama = { cx: l.x + w * 0.48, cy: l.y + h * 0.62, rx: 120, ry: 72 }; }
       } else if (cur.id === 'horta') { // canteiros dos dois lados do caminho de terra que sai da porteira
         cur.caminhoY = cur.porteira.pos;
-        const cols = [[40, 210], [240, 410], [440, 610]], linhas = [[96, ['milho', 'girassol', 'tomate']], [178, ['abobora', 'couve', 'alface']], [316, ['cenoura', 'morango', 'alface']], [400, ['morango', 'cenoura', 'couve']]];
-        for (const [b, culturas] of linhas) cols.forEach(([a, c], i) => o.push(P.canteiro(l.x + a, l.x + c, l.y + b, culturas[i])));
-        o.push(P.espantalho(l.x + 600, l.y + 240));
-        o.push(P.regador(l.x + 60, l.y + 246));
-      } else if (cur.id === 'pomar') montarPomar(cur);
-      else {
-        o.push(casinha(l.x + 120, l.y + 176, { w: 150, d: 82, H: 50, h1: 32, madeira: '#e7dfcf', friso: '#9b3022', portaL: 26, portaA: 32, elevada: 24, ninhos: true }));
-        o.push(comedouroTubo(l.x + 330, l.y + 214));
-        o.push(bebedouroGalinha(l.x + 420, l.y + 160));
+        const cols = [[40, 210], [240, 410], [440, 610]];
+        if (n === 1) { o.push(P.canteiro(l.x + 40, l.x + 300, l.y + 96, 'milho'), P.canteiro(l.x + 40, l.x + 300, l.y + 216, 'cenoura'), P.regador(l.x + 316, l.y + 146)); }
+        else {
+          const linhas = n === 2 ? [[96, ['milho', 'girassol', 'tomate']], [216, ['cenoura', 'morango', 'alface']]]
+            : [[96, ['milho', 'girassol', 'tomate']], [178, ['abobora', 'couve', 'alface']], [316, ['cenoura', 'morango', 'alface']], [400, ['morango', 'cenoura', 'couve']]];
+          for (const [b, culturas] of linhas) cols.forEach(([a, c], i) => o.push(P.canteiro(l.x + a, l.x + c, l.y + b, culturas[i])));
+          o.push(P.espantalho(l.x + 600, l.y + (n === 2 ? 146 : 240)), P.regador(l.x + 60, l.y + (n === 2 ? 148 : 246)));
+        }
+      } else { // galinheiro
+        if (n === 1) o.push(comedouroTubo(l.x + 70, l.y + 110), bebedouroGalinha(l.x + 230, l.y + 100));
+        else if (n === 2) o.push(casinha(l.x + 105, l.y + 150, { w: 150, d: 82, H: 50, h1: 32, madeira: '#e7dfcf', friso: '#9b3022', portaL: 26, portaA: 32, elevada: 24, ninhos: true }), comedouroTubo(l.x + 280, l.y + 200), bebedouroGalinha(l.x + 350, l.y + 110));
+        else o.push(casinha(l.x + 120, l.y + 176, { w: 150, d: 82, H: 50, h1: 32, madeira: '#e7dfcf', friso: '#9b3022', portaL: 26, portaA: 32, elevada: 24, ninhos: true }), comedouroTubo(l.x + 330, l.y + 214), bebedouroGalinha(l.x + 420, l.y + 160));
       }
     }
+    for (const cur of currais) montarObjetos(cur);
     const objetos = currais.flatMap(c => c.objetos);
 
     // ---------- cercas: um pedaço por vão, para entrar na ordem de profundidade ----------
@@ -371,7 +385,7 @@
       g.closePath(); g.fill();
     }
     for (const cur of currais) { // detalhes sorteados uma vez
-      const r = sorteio(cur.semente), l = cur.l, d = (cur.detalhes = []);
+      const r = sorteio(cur.semente), l = LOTES[cur.id][3], d = (cur.detalhes = []); // sobre o lote cheio: servem para todos os níveis
       const n = cur.piso === 'pasto' ? 0 : Math.round((l.w * l.h) / 260);
       for (let i = 0; i < n; i++) d.push([l.x + r() * l.w, l.y + r() * l.h, r(), r(), r()]);
     }
@@ -384,6 +398,7 @@
           g.fillStyle = 'rgba(55,45,25,.5)'; g.fillRect(l.x - 6, l.y - 6, l.w + 12, l.h + 12);
           g.fillStyle = base; g.fillRect(l.x, l.y, l.w, l.h);
           for (const [x, y, a, b, c] of cur.detalhes) {
+            if (!dentro(cur, x, y, -2)) continue;
             if (x < x0 - 20 || x > x1 + 20 || y < y0 - 20 || y > y1 + 20) continue;
             if (cur.piso === 'lama') { g.fillStyle = a < 0.5 ? 'rgba(40,28,15,.25)' : 'rgba(150,120,80,.18)'; g.beginPath(); g.ellipse(x, y, 3 + b * 9, 2 + c * 5, a * 3, 0, 7); g.fill(); }
             else if (a < 0.55) { g.fillStyle = b < 0.5 ? 'rgba(60,45,25,.22)' : 'rgba(190,160,115,.25)'; g.beginPath(); g.ellipse(x, y, 2 + b * 7, 1.5 + c * 4, a * 3, 0, 7); g.fill(); }
@@ -533,19 +548,21 @@
       }
       return melhor;
     }
-    /** muda o tamanho do pomar: devolve [lote antes, lote depois]; árvores novas nascem como mudas no instante "agora" */
-    function nivelPomar(n, agora = 0) {
-      const cur = currais.find(c => c.id === 'pomar');
-      if (n === undefined) return nivelPomarAtual;
+    /** muda o nível de um curral (ou da horta, ou do pomar): devolve [lote antes, lote depois]; sem n, devolve o nível.
+     *  Árvores novas do pomar nascem como mudas no instante "agora". */
+    function nivel(id, n, agora = 0) {
+      const cur = currais.find(c => c.id === id);
+      if (n === undefined) return cur.nivel;
       const antes = { ...cur.l }, tinha = new Set(cur.objetos.filter(o => o.tipo === 'arvore').map(o => o.pegada[0] + ',' + o.base));
-      nivelPomarAtual = n; Object.assign(cur.l, POMAR[n]);
-      montarPomar(cur); montarCerca(cur); cur.portao.ang = cur.portao.alvo = 0;
+      cur.nivel = n; Object.assign(cur.l, LOTES[id][n]);
+      montarObjetos(cur); montarCerca(cur); cur.portao.ang = cur.portao.alvo = 0;
       for (const o of cur.objetos) if (o.tipo === 'arvore' && !tinha.has(o.pegada[0] + ',' + o.base)) o.nasce = agora;
       objetos.length = 0; for (const c of currais) objetos.push(...c.objetos);
       if (qAtual) assar(qAtual, cur);
       return [antes, { ...cur.l }];
     }
-    return { currais, CERCAS, POMAR, nivelPomar, objetoEm, capim, aparado, bloqueia, pintarChao, assar, extras, mini, dentro, perto, portao, atualizar, pontosPorteira, andavelDentro };
+    const nivelPomar = (n, agora) => nivel('pomar', n, agora);
+    return { currais, CERCAS, LOTES, nivel, nivelPomar, objetoEm, capim, aparado, bloqueia, pintarChao, assar, extras, mini, dentro, perto, portao, atualizar, pontosPorteira, andavelDentro };
   }
 
   raiz.Currais = { criar };

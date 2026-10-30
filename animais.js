@@ -24,6 +24,8 @@
   };
   const ROTULO = { vaca: 'vaca', ovelha: 'ovelha', porco: 'porco', galinha: 'galinha' };
   const QUAL = { vacas: 'vaca', ovelhas: 'ovelha', porcos: 'porco', galinheiro: 'galinha' };
+  /** quantos animais cada curral tem em cada nível (o nível 3 é a lotação do jogo) */
+  const QTD = { vacas: [2, 3, 4], ovelhas: [2, 4, 6], porcos: [2, 3, 5], galinheiro: [3, 5, 8] };
 
   // ---------- partes ----------
   /** perna em dois segmentos a partir do quadril (x, y): ang > 0 leva o pé para a frente; dobra recolhe a canela */
@@ -396,7 +398,7 @@
       if (!tipo) continue; // horta e pomar não têm bichos
       e.nomes.forEach((nome, i) => {
         const p = sortearPonto(cur, e) || [cur.l.x + cur.l.w / 2, cur.l.y + cur.l.h / 2];
-        bichos.push({ tipo, e, cur, nome, var: e.vars[i], sem: 101 + bichos.length * 37, x: p[0], y: p[1], lado: i % 2 ? -1 : 1, vis: i % 2 ? -1 : 1, incl: 0, rumo: Math.random() * TAU, olhar: null,
+        bichos.push({ tipo, e, cur, nome, var: e.vars[i], sem: 101 + bichos.length * 37, x: p[0], y: p[1], ativo: true, lado: i % 2 ? -1 : 1, vis: i % 2 ? -1 : 1, incl: 0, rumo: Math.random() * TAU, olhar: null,
           estado: 'parado', t: Math.random() * 3, alvo: null, fase: Math.random() * TAU, andar: 0, cab: 0, deit: 0, rastro: 0, sujo: tipo === 'porco' && i % 2 === 1 });
       });
     }
@@ -431,6 +433,7 @@
     function atualizar(dt, agora, grama, pessoas = []) {
       gente = pessoas;
       for (const b of bichos) {
+        if (!b.ativo) continue;
         const e = b.e, k = Math.min(1, dt * 3);
         // cabeça e corpo mudam devagar (sem pulos)
         const querCab = b.estado === 'pastando' ? (b.tipo === 'galinha' ? (Math.sin(agora * 9 + b.sem) > 0.25 ? 1 : 0) : 1) : 0;
@@ -482,7 +485,7 @@
         if (b.reservado) continue; // quem está sendo ordenhado/tosquiado não é empurrado
         // não se sobrepor: quem anda desvia (muda de rumo) de quem está na frente; quem está parado dá uns passinhos
         for (const o of bichos) {
-          if (o === b || o.cur !== b.cur) continue;
+          if (o === b || o.cur !== b.cur || !o.ativo) continue;
           // distância em elipse: de lado o corpo é comprido, na frente/atrás (profundidade) bastam alguns px
           let dx = b.x - o.x, dy = (b.y - o.y) * 2.4, d = Math.hypot(dx, dy) || 0.01, min = (e.raio + o.e.raio) * 1.05;
           if (e.modelo3d) { // vaca em 3D: corpo comprido na direção do rumo
@@ -524,6 +527,7 @@
       const out = [], Q = Math.min(3, cam.escala ?? 1);
       quadroN++;
       bichos.forEach((b, i) => {
+        if (!b.ativo) return;
         if (b.x < cam.x - 80 || b.x > cam.x + cam.largura + 80 || b.y < cam.y - 10 || b.y > cam.y + cam.altura + 100) return;
         const [x0, y0, x1, y1] = CAIXA[b.tipo];
         let c = b.foto;
@@ -543,6 +547,7 @@
     function bichoEm(x, y) {
       let melhor = null, md = 1e9;
       for (const b of bichos) {
+        if (!b.ativo) continue;
         const s = b.var === 'galo' ? 1.25 : 1, dx = Math.abs(x - b.x), alto = b.e.alt * s;
         if (dx < b.e.larg * s && y < b.y + 6 && y > b.y - alto) { const d = dx + Math.abs(y - (b.y - alto / 2)); if (d < md) { md = d; melhor = b; } }
       }
@@ -555,13 +560,35 @@
     /** comida servida: os bichos do curral vão até o cocho (cada um num lugar) e comem */
     function chamarPara(cur, o) {
       for (const b of bichos) {
-        if (b.cur !== cur || b.reservado || Math.random() < 0.25) continue;
+        if (b.cur !== cur || !b.ativo || b.reservado || Math.random() < 0.25) continue;
         const alvo = sortearPonto(cur, b.e, { x: (o.pegada[0] + o.pegada[2]) / 2, y: o.pegada[3] + b.e.raio * 0.5 + 12, r: (o.pegada[2] - o.pegada[0]) / 2 + 16 });
         if (alvo) { b.estado = 'andando'; b.alvo = alvo; b.comer = true; }
       }
     }
-    return { bichos, atualizar, extras, bichoEm, chamar, reservar, chamarPara, rotulo: b => `${b.nome} · ${b.var === 'galo' ? 'galo' : ROTULO[b.tipo]}` };
+    /** acerta quantos bichos o curral tem no nível dele; os novos entram pela porteira, quem ficou fora do curral menor volta para dentro */
+    function ajustar(cur, entrar = false) {
+      const n = (QTD[cur.id] || [])[cur.nivel - 1];
+      if (n === undefined) return;
+      const pp = C.pontosPorteira(cur), lista = bichos.filter(b => b.cur === cur);
+      const dx = pp.dentro[0] - pp.meio[0], dy = pp.dentro[1] - pp.meio[1], dl = Math.hypot(dx, dy) || 1;
+      let fila = 0;
+      lista.forEach((b, i) => {
+        if (i >= n) { b.ativo = false; b.reservado = false; return; }
+        if (!b.ativo || !livre(cur, b.e, b.x, b.y)) {
+          // quem chega entra pela porteira em fila (um atrás do outro, para dentro) e já sai andando para um lugar livre
+          const novo = entrar && !b.ativo, k = fila++;
+          let p = novo ? [pp.dentro[0] + (dx / dl) * k * b.e.raio * 1.6, pp.dentro[1] + (dy / dl) * k * b.e.raio * 1.6] : sortearPonto(cur, b.e) || pp.dentro;
+          if (!livre(cur, b.e, p[0], p[1])) p = sortearPonto(cur, b.e, { x: pp.dentro[0], y: pp.dentro[1], r: 90 }) || p;
+          b.x = p[0]; b.y = p[1]; b.rumo = Math.atan2(dy, dx); b.lado = dx >= 0 ? 1 : -1; b.vis = b.lado; b.deit = 0; b.foto = null;
+          const alvo = novo && sortearPonto(cur, b.e);
+          if (alvo) { b.estado = 'andando'; b.alvo = alvo; } else { b.estado = 'parado'; b.t = 0.5 + k; b.alvo = null; }
+        }
+        b.ativo = true;
+      });
+    }
+    for (const cur of C.currais) ajustar(cur);
+    return { bichos, QTD, ajustar, atualizar, extras, bichoEm, chamar, reservar, chamarPara, rotulo: b => `${b.nome} · ${b.var === 'galo' ? 'galo' : ROTULO[b.tipo]}` };
   }
 
-  raiz.Animais = { criar, ESP };
+  raiz.Animais = { criar, ESP, QTD };
 })(typeof self !== 'undefined' ? self : globalThis);
