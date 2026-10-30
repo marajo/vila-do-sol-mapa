@@ -5,6 +5,7 @@
 (function (raiz) {
   'use strict';
   const TAU = Math.PI * 2;
+  const angulo = a => ((a % TAU) + TAU * 1.5) % TAU - Math.PI; // entre -π e π
   function sorteio(semente) { let s = semente % 2147483646 + 1; return () => (s = (s * 16807) % 2147483647) / 2147483647; }
   const rgb = h => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
   function tom(h, k = 1, a = 1) { const [r, g, b] = rgb(h); const f = v => Math.max(0, Math.min(255, Math.round(v * k))); return `rgba(${f(r)},${f(g)},${f(b)},${a})`; }
@@ -12,7 +13,7 @@
 
   // ---------- espécies ----------
   const ESP = {
-    vaca: { vel: 16, virar: 1.4, raio: 34, passo: 62, alt: 56, larg: 44, pisa: 15, nomes: ['Mimosa', 'Estrela', 'Malhada', 'Boneca'], vars: ['malhada', 'caramelo', 'malhada', 'marrom'],
+    vaca: { vel: 16, virar: 1.4, giro: 1.1, modelo3d: true, raio: 34, passo: 62, alt: 56, larg: 44, pisa: 15, nomes: ['Mimosa', 'Estrela', 'Malhada', 'Boneca'], vars: ['malhada', 'caramelo', 'malhada', 'marrom'],
       estados: [['pastando', 0.45, 6, 14], ['andando', 0.3], ['parado', 0.13, 2, 6], ['deitado', 0.12, 14, 30]] },
     ovelha: { vel: 19, virar: 0.9, raio: 22, passo: 34, alt: 38, larg: 28, pisa: 10, nomes: ['Nuvem', 'Algodão', 'Fofinha', 'Dolly', 'Branquinha', 'Lã'], vars: ['cara-preta', 'branca', 'cara-preta', 'branca', 'parda', 'cara-preta'],
       estados: [['pastando', 0.5, 4, 10], ['andando', 0.3], ['parado', 0.12, 2, 5], ['deitado', 0.08, 10, 22]] },
@@ -50,72 +51,125 @@
     if (costas) { g.fillStyle = 'rgba(255,255,255,.13)'; g.beginPath(); g.ellipse(costas[0], costas[1], costas[2], costas[3], 0, 0, TAU); g.fill(); }
   }
 
-  // ---------- vaca (virada para a direita; o pé no 0,0) ----------
+  // ---------- vaca em 3D (vira 360°) ----------
+  // Montada com elipsoides num espaço 3D (x para a frente do bicho, y para o lado, z para cima) e projetada como uma
+  // câmera a 45°: profundidade e altura encurtadas (FY, FZ), do pé da vaca para cima. Corpo, peito, anca, pescoço e
+  // coxas são pintados como uma peça só (uma luz, sem emendas); cabeça, focinho, orelhas, chifres, canelas, cascos e
+  // úbere à parte, do fundo para a frente. As manchas ficam presas na superfície: giram com o corpo e somem do lado de lá.
   const VACA = {
-    malhada: { pele: '#f2efe8', mancha: '#1d1b1b', focinho: '#e2a49b', pernas: '#ece8e0' },
-    caramelo: { pele: '#b9773f', mancha: null, focinho: '#3a2c26', pernas: '#9c6233' },
-    marrom: { pele: '#f0ebe2', mancha: '#6b3c22', focinho: '#e2a49b', pernas: '#e8e2d8' },
+    malhada: { pele: '#f1eee7', mancha: '#1d1b1b', focinho: '#e2a49b', chifre: '#e8dcc0', casco: '#2c2523', canela: '#ebe7df' },
+    caramelo: { pele: '#b9773f', mancha: null, focinho: '#3a2c26', chifre: '#e2d3b2', casco: '#2c2523', canela: '#9c6233' },
+    marrom: { pele: '#f0ebe2', mancha: '#6b3c22', focinho: '#e2a49b', chifre: '#e8dcc0', casco: '#2c2523', canela: '#ebe7df' },
   };
+  const FY = 0.66, FZ = 0.9; // encurtamento da câmera (profundidade e altura)
+  const norm = a => { const n = Math.hypot(a[0], a[1], a[2]) || 1; return [a[0] / n, a[1] / n, a[2] / n]; };
+  const LUZ = norm([-0.45, -0.5, 0.8]), VISTA = norm([0, FZ, FY]);
+  const rotZ = (t, v) => { const c = Math.cos(t), s = Math.sin(t); return [c * v[0] - s * v[1], s * v[0] + c * v[1], v[2]]; };
+  const rotY = (p, v) => { const c = Math.cos(p), s = Math.sin(p); return [c * v[0] + s * v[2], v[1], -s * v[0] + c * v[2]]; };
+  const soma = (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
+  const mul = (a, k) => [a[0] * k, a[1] * k, a[2] * k];
+  const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+  const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+  const tela = v => [v[0], v[1] * FY - v[2] * FZ]; // vetor 3D → tela
+  function elipseDe(eixos) { // elipse que semi-eixos 3D viram na tela
+    let s11 = 0, s12 = 0, s22 = 0;
+    for (const e of eixos) { const [px, py] = tela(e); s11 += px * px; s12 += px * py; s22 += py * py; }
+    const m = (s11 + s22) / 2, d = Math.hypot((s11 - s22) / 2, s12);
+    return { rx: Math.sqrt(m + d), ry: Math.sqrt(Math.max(0.01, m - d)), ang: 0.5 * Math.atan2(2 * s12, s11 - s22) };
+  }
+  /** peça: centro c e raios r no espaço do bicho, inclinada (pitch) em torno do eixo lateral */
+  function peca(b, c, r, pitch, cor, extra = {}) {
+    const eixos = [[r[0], 0, 0], [0, r[1], 0], [0, 0, r[2]]].map(v => rotZ(b.rumo, rotY(pitch, v))), w = rotZ(b.rumo, c), [tx, ty] = tela(w);
+    return { w, eixos, cor, sx: b.x + tx, sy: b.y + ty, prof: dot(w, VISTA), ...elipseDe(eixos), ...extra };
+  }
+  const contornar = (g, p) => g.ellipse(p.sx, p.sy, p.rx, p.ry, p.ang, 0, TAU);
+  function manchasDe(g, p) {
+    for (const [u, raio, cor] of p.manchas || []) {
+      const e = p.eixos, ponto = soma(soma(mul(e[0], u[0]), mul(e[1], u[1])), mul(e[2], u[2]));
+      const n = norm(soma(soma(mul(e[0], u[0] / dot(e[0], e[0])), mul(e[1], u[1] / dot(e[1], e[1]))), mul(e[2], u[2] / dot(e[2], e[2]))));
+      if (dot(n, VISTA) < 0.08) continue;
+      const t1 = norm(cross(n, Math.abs(n[2]) < 0.9 ? [0, 0, 1] : [1, 0, 0])), t2 = cross(n, t1), el = elipseDe([mul(t1, raio), mul(t2, raio)]), [tx, ty] = tela(ponto);
+      g.fillStyle = cor; g.beginPath(); g.ellipse(p.sx + tx, p.sy + ty, el.rx, el.ry, el.ang, 0, TAU); g.fill();
+    }
+  }
+  /** luz e sombra sobre um contorno já traçado: claro do lado do sol, escuro embaixo e do lado de lá */
+  function sombrear(g, cx, cy, raio, eixos, forca = 1) {
+    const u = norm(eixos.map(e => dot(e, LUZ)));
+    let hx = 0, hy = 0; eixos.forEach((e, i) => { const [a, c] = tela(e); hx += a * u[i] * 0.55; hy += c * u[i] * 0.55; });
+    const gr = g.createRadialGradient(cx + hx, cy + hy, 0, cx + hx * 0.2, cy + hy * 0.2, raio);
+    gr.addColorStop(0, `rgba(255,250,240,${0.3 * forca})`); gr.addColorStop(0.42, 'rgba(255,250,240,0)'); gr.addColorStop(0.8, `rgba(20,12,6,${0.2 * forca})`); gr.addColorStop(1, `rgba(20,12,6,${0.45 * forca})`);
+    g.fillStyle = gr;
+  }
+  function pintarPeca(g, p) {
+    g.beginPath(); contornar(g, p); g.fillStyle = p.cor; g.fill();
+    if (p.manchas) { g.save(); g.clip(); manchasDe(g, p); g.restore(); }
+    g.beginPath(); contornar(g, p); sombrear(g, p.sx, p.sy, Math.max(p.rx, p.ry) * 1.1, p.eixos, p.forca ?? 1); g.fill();
+    if (p.contorno) { g.strokeStyle = 'rgba(30,20,14,.3)'; g.lineWidth = 0.8; g.stroke(); }
+  }
+  /** corpo inteiro numa peça só: mesma cor, manchas, uma luz e um contorno fino em volta */
+  function pintarCorpo(g, pecas, cor, base) {
+    const caminho = () => { g.beginPath(); for (const p of pecas) { g.moveTo(p.sx + p.rx * Math.cos(p.ang), p.sy + p.rx * Math.sin(p.ang)); contornar(g, p); } };
+    caminho(); g.strokeStyle = 'rgba(28,18,12,.45)'; g.lineWidth = 1.6; g.stroke();
+    g.fillStyle = cor; g.fill();
+    g.save(); caminho(); g.clip();
+    for (const p of pecas) manchasDe(g, p);
+    sombrear(g, base.sx, base.sy, Math.max(base.rx, base.ry) * 1.25, base.eixos);
+    g.fillRect(base.sx - 90, base.sy - 90, 180, 180);
+    g.restore();
+  }
   function vaca(g, b, agora) {
-    const v = VACA[b.var], oy = b.deit * 22, r = sorteio(b.sem);
-    sombra(g, 40, 8 + b.deit * 2, 0.28 + b.deit * 0.08);
-    // rabo
+    const v = VACA[b.var], dz = b.deit * 20, pele = v.pele, r = sorteio(b.sem);
+    if (!b.manchas) { // manchas sorteadas uma vez por vaca, em cada parte do corpo
+      const sorteia = n => Array.from({ length: n }, () => [norm([r() * 2 - 1, r() * 2 - 1, r() * 1.6 - 0.4]), 8 + r() * 9, v.mancha]);
+      b.manchas = v.mancha ? { barril: sorteia(6), peito: sorteia(2), anca: sorteia(3), pescoco: sorteia(1), cabeca: r() < 0.6 ? sorteia(1) : [], coxa: sorteia(1) } : {};
+    }
+    const M = k => b.manchas[k] || null;
+    const corpo = [], soltas = [];
+    // tronco: um barril comprido, peito e anca (a linha das costas fica reta, como de vaca de verdade)
+    const barril = peca(b, [-3, 0, 42 - dz], [33, 16.5, 15.5], 0, pele, { manchas: M('barril') });
+    corpo.push(barril, peca(b, [20, 0, 42 - dz], [15, 14.5, 16], -0.12, pele, { manchas: M('peito') }), peca(b, [-26, 0, 44 - dz], [13, 15.5, 14], 0.1, pele, { manchas: M('anca') }));
+    // pescoço (abaixa para pastar) e cabeça
+    const np = -0.32 + b.cab * 1.2 + Math.sin(agora * 0.7 + b.sem) * 0.04 * (1 - b.cab), nb = [26, 0, 46 - dz];
+    corpo.push(peca(b, soma(nb, rotY(np, [11, 0, 0])), [14, 8.5, 11], np, pele, { manchas: M('pescoco') }));
+    if (b.deit < 0.5 && b.var !== 'caramelo') soltas.push(peca(b, [-12, 0, 26 - dz], [8, 7, 5.5], 0, '#eaa5a0', { forca: 0.6 }));
+    // pernas: coxa entra no corpo; canela e casco à parte (passo em quatro tempos; deitada, dobradas)
+    for (const [hx, hy, off, frente] of [[-25, 8.5, 0, false], [19, 8.5, 0.25, true], [-25, -8.5, 0.5, false], [19, -8.5, 0.75, true]]) {
+      const s = b.fase + off * TAU;
+      let a = Math.sin(s) * 0.45 * b.andar, k = Math.max(0, -Math.cos(s)) * 0.7 * b.andar;
+      a = a * (1 - b.deit) + b.deit * (frente ? -1.35 : 1.25); k = k * (1 - b.deit) + b.deit * (frente ? 2.2 : -2.2);
+      const enc = 1 - b.deit * 0.35, quadril = [hx, hy, 36 - dz], joelho = soma(quadril, rotY(a, [0, 0, -19 * enc]));
+      corpo.push(peca(b, soma(quadril, rotY(a, [0, 0, -8 * enc])), [6.5, 5.2, 12 * enc], a, pele, { manchas: hx < 0 ? M('coxa') : null }));
+      soltas.push(peca(b, soma(joelho, rotY(a + k, [0, 0, -7.5 * enc])), [3.5, 3.4, 8.5 * enc], a + k, v.canela, { contorno: true, forca: 0.8 }));
+      soltas.push(peca(b, soma(joelho, rotY(a + k, [0, 0, -15 * enc])), [3.9, 3.9, 2.5], a + k, v.casco, { forca: 0.4 }));
+    }
+    const hb = soma(nb, rotY(np, [23, 0, 0])), hp = np + 0.62, mast = b.cab > 0.5 || b.deit > 0.6 ? Math.sin(agora * 7 + b.sem) * 0.8 : 0;
+    const cabeca = (c, rr, cor, extra) => soltas.push(peca(b, soma(hb, rotY(hp, c)), rr, hp, cor, extra));
+    cabeca([5, 0, 0.5], [12.5, 7.2, 8.4], b.var === 'malhada' && b.sem % 2 ? v.mancha : pele, { manchas: M('cabeca'), contorno: true });
+    cabeca([16.5, 0, -1.5 + mast * 0.3], [5.6, 6.4, 5.4], v.focinho, { forca: 0.7, contorno: true });
+    for (const lado of [-1, 1]) {
+      cabeca([-2, lado * 9.5, 4], [3.2, 6.2, 1.6], tom(pele, 0.92), { contorno: true });
+      cabeca([-0.5, lado * 4.6, 8.6], [1.6, 1.6, 4.6], v.chifre, { forca: 0.6 });
+      cabeca([4.5, lado * 6.8, 2.8], [1.8, 1.3, 1.8], '#16100e', { forca: 0 });
+      cabeca([21, lado * 2.3, -0.8], [1, 1, 1.2], '#4a2a24', { forca: 0 });
+    }
+    // rabo balançando (fio com tufo)
     const sw = Math.sin(agora * 2.1 + b.sem) * 5 + Math.sin(agora * 5.3 + b.sem) * 1.5;
-    g.strokeStyle = tom(v.pele, 0.85); g.lineWidth = 2.4; g.lineCap = 'round';
-    g.beginPath(); g.moveTo(-38, -44 + oy); g.quadraticCurveTo(-47, -30 + oy, -44 + sw, -12 + oy * 0.6); g.stroke();
-    g.fillStyle = v.mancha || '#3a2418'; g.beginPath(); g.ellipse(-44 + sw, -11 + oy * 0.6, 2.6, 4.5, sw * 0.04, 0, TAU); g.fill();
-    pernas(g, b, [[-26, -30 + oy, 0.5, true], [21, -30 + oy, 0.75, true], [-28, -29 + oy, 0, false], [18, -29 + oy, 0.25, false]], 30, 7.5, v.pernas, '#2c2523');
-    // corpo
-    g.save();
-    g.beginPath();
-    g.moveTo(-40, -36 + oy);
-    g.bezierCurveTo(-42, -46 + oy, -36, -51 + oy, -26, -49 + oy);
-    g.bezierCurveTo(-8, -46 + oy, 8, -47 + oy, 22, -51 + oy);
-    g.bezierCurveTo(32, -52 + oy, 37, -44 + oy, 36, -34 + oy);
-    g.bezierCurveTo(35, -24 + oy, 28, -20 + oy, 20, -21 + oy);
-    g.bezierCurveTo(6, -17 + oy, -12, -17 + oy, -24, -21 + oy);
-    g.bezierCurveTo(-34, -23 + oy, -40, -28 + oy, -40, -36 + oy);
-    g.closePath();
-    g.fillStyle = v.pele; g.fill();
-    g.strokeStyle = 'rgba(40,28,18,.4)'; g.lineWidth = 1; g.stroke();
-    g.clip();
-    if (v.mancha) for (let i = 0; i < 5; i++) { // manchas próprias de cada vaca
-      const mx = -38 + r() * 72, my = -52 + r() * 30 + oy;
-      g.fillStyle = v.mancha; g.beginPath();
-      for (let k = 0; k < 3; k++) { g.ellipse(mx + (r() - 0.5) * 10, my + (r() - 0.5) * 7, 5 + r() * 9, 4 + r() * 6, r() * 3, 0, TAU); }
-      g.fill();
+    const P = c => { const w = rotZ(b.rumo, c), [tx, ty] = tela(w); return [b.x + tx, b.y + ty, dot(w, VISTA)]; };
+    const raiz = P([-38, 0, 48 - dz]), meio = P([-43, sw * 0.4, 33 - dz]), ponta = P([-42, sw, 17 - dz * 0.4]);
+    soltas.push({ prof: raiz[2] - 4, rabo: [raiz, meio, ponta] });
+    // sombra no chão
+    const cr = Math.cos(b.rumo), sr = Math.sin(b.rumo);
+    g.fillStyle = `rgba(18,24,8,${0.3 + b.deit * 0.08})`; g.beginPath(); g.ellipse(b.x, b.y + 1, 40 * Math.abs(cr) + 17 * Math.abs(sr), (17 * Math.abs(cr) + 40 * Math.abs(sr)) * FY * 0.6, 0, 0, TAU); g.fill();
+    // do fundo para a frente; o corpo entra na ordem pela profundidade do barril
+    const itens = [...soltas, { prof: barril.prof, corpo: true }].sort((a, c) => a.prof - c.prof);
+    for (const p of itens) {
+      if (p.corpo) pintarCorpo(g, corpo, pele, barril);
+      else if (p.rabo) {
+        const [a, m, c] = p.rabo;
+        g.strokeStyle = tom(pele, 0.8); g.lineWidth = 2.3; g.lineCap = 'round'; g.beginPath(); g.moveTo(a[0], a[1]); g.quadraticCurveTo(m[0], m[1], c[0], c[1]); g.stroke();
+        g.fillStyle = v.mancha || '#3a2418'; g.beginPath(); g.ellipse(c[0], c[1] + 1, 2.6, 4.4, 0, 0, TAU); g.fill();
+      } else pintarPeca(g, p);
     }
-    g.strokeStyle = 'rgba(0,0,0,.12)'; g.lineWidth = 1.2; // costelas e anca
-    for (let k = 0; k < 3; k++) { g.beginPath(); g.arc(-2 + k * 7, -26 + oy, 9, 3.6, 4.6); g.stroke(); }
-    g.beginPath(); g.arc(-28, -42 + oy, 7, 3.4, 5.6); g.stroke();
-    volume(g, -54 + oy, -16 + oy, [-6, -47 + oy, 30, 3.5]);
-    g.restore();
-    if (b.deit < 0.5 && b.var !== 'caramelo') { // úbere
-      g.fillStyle = '#eaa5a0'; g.beginPath(); g.ellipse(-12, -18 + oy, 7, 4.5, 0, 0, TAU); g.fill();
-      g.strokeStyle = '#d98a86'; g.lineWidth = 1.6; g.beginPath(); for (const tx of [-15, -9]) { g.moveTo(tx, -15); g.lineTo(tx, -12.5); } g.stroke();
-    }
-    // pescoço e cabeça (gira para baixo para pastar; mastiga)
-    const ca = -0.12 + b.cab * 1.2 + Math.sin(agora * 0.7 + b.sem) * 0.04 * (1 - b.cab), px = 29, py = -41 + oy;
-    const rot = (x, y) => [px + x * Math.cos(ca) - y * Math.sin(ca), py + x * Math.sin(ca) + y * Math.cos(ca)];
-    const [t1x, t1y] = rot(11, -8), [t2x, t2y] = rot(13, 7);
-    g.fillStyle = v.pele; g.beginPath(); g.moveTo(20, -51 + oy); g.lineTo(t1x, t1y); g.lineTo(t2x, t2y); g.lineTo(31, -26 + oy); g.closePath(); g.fill();
-    g.fillStyle = 'rgba(0,0,0,.1)'; g.beginPath(); g.moveTo(26, -30 + oy); g.lineTo(t2x, t2y); g.lineTo(31, -26 + oy); g.fill();
-    g.save(); g.translate(px, py); g.rotate(ca);
-    const mast = b.cab > 0.5 || b.deit > 0.6 ? Math.sin(agora * 7 + b.sem) * 0.9 : 0;
-    g.fillStyle = tom(v.pele, 0.92); g.beginPath(); g.ellipse(9, -12, 7, 2.8, -0.7, 0, TAU); g.fill(); // orelha de trás
-    g.fillStyle = v.var === 'malhada' && b.sem % 2 ? v.mancha : v.pele;
-    g.beginPath(); g.moveTo(8, -9); g.bezierCurveTo(22, -11, 32, -8, 38, -3); g.bezierCurveTo(41, 1, 40, 6 + mast, 36, 8 + mast); g.bezierCurveTo(26, 9, 14, 9, 9, 7); g.closePath(); g.fill();
-    g.strokeStyle = 'rgba(40,28,18,.35)'; g.lineWidth = 0.9; g.stroke();
-    if (v.mancha && b.sem % 2 === 0) { g.fillStyle = v.mancha; g.beginPath(); g.ellipse(18, -4, 7, 5, 0.2, 0, TAU); g.fill(); }
-    g.fillStyle = v.focinho; g.beginPath(); g.ellipse(36, 2 + mast * 0.5, 6, 6, 0, 0, TAU); g.fill();
-    g.fillStyle = 'rgba(30,15,10,.7)'; g.beginPath(); g.ellipse(39.5, 0.5, 1.2, 1.8, 0.3, 0, TAU); g.fill();
-    g.fillStyle = '#1b1414'; g.beginPath(); g.ellipse(22, -4, 2.4, 2, 0, 0, TAU); g.fill();
-    g.fillStyle = '#fff'; g.beginPath(); g.arc(22.6, -4.6, 0.7, 0, TAU); g.fill();
-    g.fillStyle = '#e8dcc0'; g.beginPath(); g.moveTo(12, -9); g.quadraticCurveTo(13, -16, 18, -18); g.quadraticCurveTo(15, -14, 15, -9); g.fill(); // chifre
-    g.fillStyle = v.pele; g.beginPath(); g.ellipse(12, -10, 7.5, 3, -0.4 + Math.sin(agora * 3 + b.sem) * 0.08, 0, TAU); g.fill(); // orelha
-    g.fillStyle = '#e8a9a2'; g.beginPath(); g.ellipse(13, -10, 4.2, 1.4, -0.4, 0, TAU); g.fill();
-    g.fillStyle = degradeV(g, -12, 9, [[0, 'rgba(255,255,255,.18)'], [1, 'rgba(0,0,0,.18)']]); g.beginPath(); g.ellipse(22, -1, 16, 9, 0, 0, TAU); g.fill();
-    g.restore();
   }
 
   // ---------- ovelha ----------
@@ -241,7 +295,7 @@
       const tipo = espDe(cur), e = ESP[tipo];
       e.nomes.forEach((nome, i) => {
         const p = sortearPonto(cur, e) || [cur.l.x + cur.l.w / 2, cur.l.y + cur.l.h / 2];
-        bichos.push({ tipo, e, cur, nome, var: e.vars[i], sem: 101 + bichos.length * 37, x: p[0], y: p[1], lado: i % 2 ? -1 : 1, vis: i % 2 ? -1 : 1, incl: 0,
+        bichos.push({ tipo, e, cur, nome, var: e.vars[i], sem: 101 + bichos.length * 37, x: p[0], y: p[1], lado: i % 2 ? -1 : 1, vis: i % 2 ? -1 : 1, incl: 0, rumo: Math.random() * TAU, olhar: null,
           estado: 'parado', t: Math.random() * 3, alvo: null, fase: Math.random() * TAU, andar: 0, cab: 0, deit: 0, rastro: 0, sujo: tipo === 'porco' && i % 2 === 1 });
       });
     }
@@ -286,7 +340,21 @@
         // o corpo gira devagar para o lado em que vai (vis passa de 1 a -1: o bicho vira de frente no meio da volta)
         const girar = Math.min(Math.abs(b.lado - b.vis), (dt * 2) / e.virar);
         b.vis += Math.sign(b.lado - b.vis) * girar;
-        if (b.estado === 'andando') {
+        if (e.modelo3d && b.olhar != null && b.estado !== 'andando') { // parada, vira o corpo devagar para onde chamaram
+          const dif = angulo(b.olhar - b.rumo); b.rumo += Math.sign(dif) * Math.min(Math.abs(dif), e.giro * dt); if (Math.abs(dif) < 0.02) b.olhar = null;
+        }
+        if (b.estado === 'andando' && e.modelo3d) {
+          // em 3D anda para qualquer lado, sempre para onde a cabeça aponta: vira devagar e só acelera alinhada
+          if (!anda || b.reservado) continue;
+          const [tx, ty] = b.alvo, dx = tx - b.x, dy = ty - b.y, d = Math.hypot(dx, dy);
+          if (d < 6) { escolher(b); continue; }
+          const dif = angulo(Math.atan2(dy, dx) - b.rumo);
+          b.rumo += Math.sign(dif) * Math.min(Math.abs(dif), e.giro * dt);
+          const ux = Math.cos(b.rumo), uy = Math.sin(b.rumo), s = Math.min(d, e.vel * Math.max(0.22, Math.cos(dif)) * dt), nx = b.x + ux * s, ny = b.y + uy * s;
+          if (!livre(b.cur, e, nx, ny) || perto(b, nx, ny)) { escolher(b); continue; }
+          b.x = nx; b.y = ny; b.fase += (s / e.passo) * TAU; b.rastro += s;
+          if (e.pisa && b.rastro > 7 && grama) { b.rastro = 0; grama.pisar(b.x, b.y + 2, ux, uy, agora, e.pisa, 6); }
+        } else if (b.estado === 'andando') {
           if (!anda || b.reservado) continue; // levantando antes de sair
           const [tx, ty] = b.alvo, dx = tx - b.x, dy = ty - b.y, d = Math.hypot(dx, dy);
           if (d < 5) { escolher(b); continue; }
@@ -303,15 +371,20 @@
         } else {
           b.incl += (0 - b.incl) * Math.min(1, dt * 2);
           if (!b.reservado) { b.t -= dt; if (b.t <= 0) escolher(b); }
-          if (b.estado === 'pastando' && grama && e.pisa && Math.random() < dt * 0.15) grama.aparar(b.x + b.lado * e.larg * 0.9, b.y, 9, 0.75, 4); // o pasto vai ficando rapado onde comem
+          if (b.estado === 'pastando' && grama && e.pisa && Math.random() < dt * 0.15) grama.aparar(b.x + (e.modelo3d ? Math.cos(b.rumo) * 50 : b.lado * e.larg * 0.9), b.y + (e.modelo3d ? Math.sin(b.rumo) * 50 : 0), 9, 0.75, 4); // o pasto vai ficando rapado onde comem
         }
         if (b.reservado) continue; // quem está sendo ordenhado/tosquiado não é empurrado
         // não se sobrepor: quem anda desvia (muda de rumo) de quem está na frente; quem está parado dá uns passinhos
         for (const o of bichos) {
           if (o === b || o.cur !== b.cur) continue;
           // distância em elipse: de lado o corpo é comprido, na frente/atrás (profundidade) bastam alguns px
-          const dx = b.x - o.x, dy = (b.y - o.y) * 2.4, d = Math.hypot(dx, dy) || 0.01, min = (e.raio + o.e.raio) * 1.05;
-          if (b.estado === 'andando') { if (d < min && (o.x - b.x) * b.vis > 0) escolher(b); continue; }
+          let dx = b.x - o.x, dy = (b.y - o.y) * 2.4, d = Math.hypot(dx, dy) || 0.01, min = (e.raio + o.e.raio) * 1.05;
+          if (e.modelo3d) { // vaca em 3D: corpo comprido na direção do rumo
+            const rx = b.x - o.x, ry = b.y - o.y, ao = Math.cos(b.rumo) * rx + Math.sin(b.rumo) * ry, tr = -Math.sin(b.rumo) * rx + Math.cos(b.rumo) * ry;
+            d = Math.hypot(ao, tr * 2) || 0.01; dx = rx; dy = ry * 2.4; min = e.raio + o.e.raio * 0.8;
+          }
+          const naFrente = e.modelo3d ? (o.x - b.x) * Math.cos(b.rumo) + (o.y - b.y) * Math.sin(b.rumo) > 0 : (o.x - b.x) * b.vis > 0;
+          if (b.estado === 'andando') { if (d < min && naFrente) escolher(b); continue; }
           if (d < min) {
             const p = Math.min(1, (min - d) / d) * Math.min(1, dt * 4), nx = b.x + dx * p, ny = b.y + (dy * p) / 2.4;
             if (livre(b.cur, e, nx, ny)) { b.x = nx; b.y = ny; }
@@ -331,6 +404,7 @@
         if (b.x < cam.x - 60 || b.x > cam.x + cam.largura + 60 || b.y < cam.y - 10 || b.y > cam.y + cam.altura + 80) continue;
         // de lado; no meio da volta fica estreito (de frente); descendo/subindo a tela inclina um pouco o corpo
         const sx = Math.sign(b.vis || b.lado) * (0.4 + 0.6 * Math.abs(b.vis)); // no meio da volta: encurtado, como visto em diagonal
+        if (b.e.modelo3d) { out.push({ y: b.y, desenhar: () => DESENHO[b.tipo](ctx, b, agora) }); continue; } // 3D: já desenha no mundo
         out.push({ y: b.y, desenhar: () => { ctx.save(); ctx.translate(b.x, b.y); ctx.scale(sx, 1); ctx.rotate(b.incl * 0.22); DESENHO[b.tipo](ctx, b, agora); ctx.restore(); } });
       }
       return out;
@@ -344,7 +418,7 @@
       return melhor;
     }
     /** reação ao clique: olha para quem chamou e muda de estado */
-    function chamar(b, x) { b.lado = x > b.x ? 1 : -1; if (b.estado === 'deitado') return; b.estado = 'parado'; b.t = 2.5; b.alvo = null; }
+    function chamar(b, x) { b.lado = x > b.x ? 1 : -1; b.olhar = x > b.x ? 0 : Math.PI; if (b.estado === 'deitado') return; b.estado = 'parado'; b.t = 2.5; b.alvo = null; }
     /** segura o animal parado (ordenha, tosquia) ou solta de novo */
     function reservar(b, sim) { b.reservado = sim; if (sim) { b.estado = 'parado'; b.alvo = null; b.t = 999; } else escolher(b); }
     /** comida servida: os bichos do curral vão até o cocho (cada um num lugar) e comem */

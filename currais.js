@@ -72,24 +72,34 @@
         g.fillStyle = 'rgba(0,0,0,.2)'; g.fillRect(x1 - 3, yT - dd, 3, base - yT + dd);
       } };
     }
-    function bebedouro(cx, base, rr, hh = 22, galvanizado = false) {
-      const yc = base - rr;
-      return { tipo: 'bebedouro', base, pegada: [cx - rr, base - rr * 2, cx + rr, base], caixa: [cx - rr - 6, yc - hh - rr - 6, cx + rr + 6, base + 8], pintar(g, r) {
-        g.fillStyle = 'rgba(25,20,10,.35)'; g.beginPath(); g.ellipse(cx + 4, base - 2, rr + 2, 6, 0, 0, 7); g.fill();
-        g.save(); g.beginPath(); g.rect(cx - rr, yc - hh, rr * 2, hh); g.arc(cx, yc, rr, 0, Math.PI); g.closePath(); g.clip();
-        g.fillStyle = galvanizado ? degradeH(g, cx - rr, cx + rr, [[0, '#a9b0b2'], [0.25, '#e1e6e7'], [0.7, '#9aa1a3'], [1, '#6c7375']])
-          : degradeH(g, cx - rr, cx + rr, [[0, '#a9a397'], [0.3, '#cfc9bc'], [0.75, '#9c968a'], [1, '#77726a']]);
-        g.fillRect(cx - rr, yc - hh, rr * 2, hh + rr);
-        for (let i = 0; i < 26; i++) { g.fillStyle = 'rgba(70,70,60,.15)'; g.fillRect(cx - rr + r() * rr * 2, yc - hh + r() * (hh + rr), 1.4, 1.4); }
-        g.fillStyle = 'rgba(60,80,40,.25)'; g.fillRect(cx - rr, yc + rr * 0.5, rr * 2, rr); // limo embaixo
-        g.restore();
-        g.fillStyle = galvanizado ? '#c3c9ca' : '#c2bcae'; g.beginPath(); g.arc(cx, yc - hh, rr, 0, 7); g.fill();
-        const agua = g.createRadialGradient(cx - rr * 0.3, yc - hh - rr * 0.35, 1, cx, yc - hh, rr);
-        agua.addColorStop(0, '#9cc3c8'); agua.addColorStop(0.45, '#4c7f84'); agua.addColorStop(1, '#2b5155');
-        g.fillStyle = agua; g.beginPath(); g.arc(cx, yc - hh, rr - 4, 0, 7); g.fill();
-        g.strokeStyle = 'rgba(255,255,255,.45)'; g.lineWidth = 1.2; g.beginPath(); g.arc(cx - 2, yc - hh - 2, rr * 0.55, 3.6, 4.6); g.stroke();
-        g.fillStyle = '#6f8f3a'; g.beginPath(); g.ellipse(cx + rr * 0.35, yc - hh + rr * 0.2, 3, 1.6, 0.6, 0, 7); g.fill(); // folha boiando
-        g.strokeStyle = 'rgba(40,40,35,.4)'; g.lineWidth = 1; g.beginPath(); g.arc(cx, yc - hh, rr, 0, 7); g.stroke();
+    /** bebedouro baixo e comprido, do jeito do cocho, cheio d'água (cimento ou madeira) */
+    function bebedouro(x0, x1, base, madeira = false) {
+      const dd = 24, hh = 13, yT = base - hh;
+      return { tipo: 'bebedouro', base, pegada: [x0, base - dd, x1, base], caixa: [x0 - 8, yT - dd - 10, x1 + 8, base + 8], pintar(g, r) {
+        const cor = madeira ? '#8a6743' : '#b3ada0';
+        g.fillStyle = 'rgba(25,20,10,.35)'; g.fillRect(x0 + 2, base - 2, x1 - x0, 7);
+        g.fillStyle = 'rgba(60,70,40,.35)'; g.fillRect(x0 - 3, base - 1, x1 - x0 + 6, 4); // chão molhado
+        // borda e água (vista de cima)
+        g.fillStyle = tom(cor, 0.82); g.fillRect(x0, yT - dd, x1 - x0, dd);
+        g.fillStyle = tom(cor, 1.22); g.fillRect(x0, yT - dd, x1 - x0, 2.5);
+        const ax0 = x0 + 4, ax1 = x1 - 4, ay0 = yT - dd + 4, ay1 = yT - 3;
+        g.fillStyle = degradeV(g, ay0, ay1, [[0, '#2f5559'], [0.5, '#3f6f72'], [1, '#55878a']]); g.fillRect(ax0, ay0, ax1 - ax0, ay1 - ay0);
+        g.fillStyle = 'rgba(20,30,25,.35)'; g.fillRect(ax0, ay0, ax1 - ax0, 3); // sombra da borda na água
+        g.fillStyle = degradeH(g, ax0, ax1, [[0, 'rgba(210,232,240,0)'], [0.3, 'rgba(210,232,240,.35)'], [0.42, 'rgba(210,232,240,0)'], [1, 'rgba(210,232,240,0)']]); g.fillRect(ax0, ay0 + 3, ax1 - ax0, ay1 - ay0 - 3); // reflexo do céu
+        g.strokeStyle = 'rgba(235,245,248,.45)'; g.lineWidth = 0.8;
+        for (let i = 0; i < (x1 - x0) / 18; i++) { const wx = ax0 + 6 + r() * (ax1 - ax0 - 12), wy = ay0 + 5 + r() * (ay1 - ay0 - 8); g.beginPath(); g.ellipse(wx, wy, 3 + r() * 4, 1, 0, 3.4, 6); g.stroke(); }
+        g.fillStyle = '#6f8f3a'; g.beginPath(); g.ellipse(ax0 + (ax1 - ax0) * 0.7, ay0 + 9, 3, 1.5, 0.6, 0, 7); g.fill(); // folha boiando
+        // frente
+        if (madeira) for (const [yy, h] of [[yT, 7], [yT + 7, 6]]) {
+          g.fillStyle = degradeV(g, yy, yy + h, [[0, tom(cor, 1.1)], [1, tom(cor, 0.8)]]); g.fillRect(x0, yy, x1 - x0, h - 0.8);
+          g.fillStyle = 'rgba(0,0,0,.25)'; g.fillRect(x0, yy + h - 1, x1 - x0, 1);
+          g.fillStyle = '#2b2622'; for (const nx of [x0 + 4, x1 - 5]) g.fillRect(nx, yy + 2.5, 1.6, 1.6);
+        } else {
+          g.fillStyle = degradeV(g, yT, base, [[0, '#cbc5b8'], [1, '#8f897d']]); g.fillRect(x0, yT, x1 - x0, hh);
+          for (let i = 0; i < 26; i++) { g.fillStyle = 'rgba(70,65,55,.18)'; g.fillRect(x0 + r() * (x1 - x0), yT + r() * hh, 1.5, 1.5); }
+          g.fillStyle = 'rgba(60,85,45,.35)'; g.fillRect(x0, base - 4, x1 - x0, 4); // limo no pé
+        }
+        g.fillStyle = 'rgba(0,0,0,.2)'; g.fillRect(x1 - 3, yT - dd, 3, hh + dd);
       } };
     }
     function rolo(cx, base, rr, comp) { // rolo de feno deitado, com a ponta enrolada virada para a frente
@@ -179,16 +189,16 @@
       if (cur.id === 'vacas') {
         o.push(abrigo(l.x + l.w - 300, l.x + l.w - 40, l.y + 182, 118));
         o.push(cocho(l.x + 120, l.x + 330, l.y + 118, 'feno'));
-        o.push(bebedouro(l.x + l.w - 190, l.y + l.h - 70, 36));
+        o.push(bebedouro(l.x + l.w - 270, l.x + l.w - 110, l.y + l.h - 60));
         o.push(rolo(l.x + 560, l.y + l.h - 150, 24, 40));
       } else if (cur.id === 'ovelhas') {
         o.push(casinha(l.x + 130, l.y + 156, { w: 168, d: 92, H: 58, h1: 40, madeira: '#9a7a54', friso: '#5a4230' }));
         o.push(cocho(l.x + 330, l.x + 460, l.y + 96, 'feno'));
-        o.push(bebedouro(l.x + l.w - 90, l.y + l.h - 60, 24, 18));
+        o.push(bebedouro(l.x + l.w - 160, l.x + l.w - 60, l.y + l.h - 56, true));
       } else if (cur.id === 'porcos') {
         o.push(casinha(l.x + l.w - 130, l.y + 140, { w: 172, d: 94, H: 50, h1: 36, madeira: '#7d5d3e', friso: '#4a3422', semJanela: true }));
         o.push(cocho(l.x + 60, l.x + 230, l.y + 82, 'lavagem', true));
-        o.push(bebedouro(l.x + 90, l.y + l.h - 60, 22, 16, true));
+        o.push(bebedouro(l.x + 40, l.x + 150, l.y + l.h - 56));
         cur.lama = { cx: l.x + l.w * 0.48, cy: l.y + l.h * 0.62, rx: 120, ry: 72 };
       } else {
         o.push(casinha(l.x + 120, l.y + 176, { w: 150, d: 82, H: 50, h1: 32, madeira: '#e7dfcf', friso: '#9b3022', portaL: 26, portaA: 32, elevada: 24, ninhos: true }));
@@ -387,7 +397,7 @@
     function aparado(x, y) {
       let k = 1;
       for (const cur of currais) {
-        if (dentro(cur, x, y, -2)) return cur.piso === 'pasto' ? 0.32 + 0.16 * ruido(x / 60, y / 60, 35) : 0.38;
+        if (dentro(cur, x, y, -2)) return cur.piso === 'pasto' ? (cur.id === 'vacas' ? 0.22 : 0.32) + 0.12 * ruido(x / 60, y / 60, 35) : 0.38; // vacas: pasto bem rapado (aparecem as pernas)
         // por fora, o capim é roçado junto da cerca (a cerca aparece inteira)
         const l = cur.l, dx = Math.max(l.x - x, 0, x - l.x - l.w), dy = Math.max(l.y - y, 0, y - l.y - l.h), d = Math.hypot(dx, dy) + (ruido(x / 30, y / 30, 37) - 0.5) * 20;
         if (d < 70) k = Math.min(k, d < 20 ? 0.38 : 0.38 + 0.62 * (d - 20) / 50);
