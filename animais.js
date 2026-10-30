@@ -12,13 +12,13 @@
 
   // ---------- espécies ----------
   const ESP = {
-    vaca: { vel: 16, raio: 34, passo: 62, alt: 56, larg: 44, pisa: 15, nomes: ['Mimosa', 'Estrela', 'Malhada', 'Boneca'], vars: ['malhada', 'caramelo', 'malhada', 'marrom'],
+    vaca: { vel: 16, virar: 1.4, raio: 34, passo: 62, alt: 56, larg: 44, pisa: 15, nomes: ['Mimosa', 'Estrela', 'Malhada', 'Boneca'], vars: ['malhada', 'caramelo', 'malhada', 'marrom'],
       estados: [['pastando', 0.45, 6, 14], ['andando', 0.3], ['parado', 0.13, 2, 6], ['deitado', 0.12, 14, 30]] },
-    ovelha: { vel: 19, raio: 22, passo: 34, alt: 38, larg: 28, pisa: 10, nomes: ['Nuvem', 'Algodão', 'Fofinha', 'Dolly', 'Branquinha', 'Lã'], vars: ['cara-preta', 'branca', 'cara-preta', 'branca', 'parda', 'cara-preta'],
+    ovelha: { vel: 19, virar: 0.9, raio: 22, passo: 34, alt: 38, larg: 28, pisa: 10, nomes: ['Nuvem', 'Algodão', 'Fofinha', 'Dolly', 'Branquinha', 'Lã'], vars: ['cara-preta', 'branca', 'cara-preta', 'branca', 'parda', 'cara-preta'],
       estados: [['pastando', 0.5, 4, 10], ['andando', 0.3], ['parado', 0.12, 2, 5], ['deitado', 0.08, 10, 22]] },
-    porco: { vel: 18, raio: 22, passo: 30, alt: 34, larg: 30, pisa: 0, nomes: ['Toicinho', 'Rosinha', 'Bolota', 'Torresmo', 'Chiquinho'], vars: ['rosa', 'malhado', 'rosa', 'rosa', 'malhado'],
+    porco: { vel: 18, virar: 0.9, raio: 22, passo: 30, alt: 34, larg: 30, pisa: 0, nomes: ['Toicinho', 'Rosinha', 'Bolota', 'Torresmo', 'Chiquinho'], vars: ['rosa', 'malhado', 'rosa', 'rosa', 'malhado'],
       estados: [['pastando', 0.35, 3, 8], ['andando', 0.35], ['parado', 0.1, 2, 4], ['deitado', 0.2, 12, 26]] },
-    galinha: { vel: 34, raio: 9, passo: 12, alt: 30, larg: 12, pisa: 0, nomes: ['Galo Chico', 'Carijó', 'Ruiva', 'Nevada', 'Pretinha', 'Pintadinha', 'Cocó', 'Dona Filó'], vars: ['galo', 'carijo', 'caipira', 'branca', 'preta', 'carijo', 'caipira', 'branca'],
+    galinha: { vel: 34, virar: 0.3, raio: 9, passo: 12, alt: 30, larg: 12, pisa: 0, nomes: ['Galo Chico', 'Carijó', 'Ruiva', 'Nevada', 'Pretinha', 'Pintadinha', 'Cocó', 'Dona Filó'], vars: ['galo', 'carijo', 'caipira', 'branca', 'preta', 'carijo', 'caipira', 'branca'],
       estados: [['pastando', 0.55, 0.8, 2.6], ['andando', 0.4], ['parado', 0.05, 1, 3]] },
   };
   const ROTULO = { vaca: 'vaca', ovelha: 'ovelha', porco: 'porco', galinha: 'galinha' };
@@ -241,12 +241,13 @@
       const tipo = espDe(cur), e = ESP[tipo];
       e.nomes.forEach((nome, i) => {
         const p = sortearPonto(cur, e) || [cur.l.x + cur.l.w / 2, cur.l.y + cur.l.h / 2];
-        bichos.push({ tipo, e, cur, nome, var: e.vars[i], sem: 101 + bichos.length * 37, x: p[0], y: p[1], f: Math.random() < 0.5 ? -1 : 1,
+        bichos.push({ tipo, e, cur, nome, var: e.vars[i], sem: 101 + bichos.length * 37, x: p[0], y: p[1], lado: i % 2 ? -1 : 1, vis: i % 2 ? -1 : 1, incl: 0,
           estado: 'parado', t: Math.random() * 3, alvo: null, fase: Math.random() * TAU, andar: 0, cab: 0, deit: 0, rastro: 0, sujo: tipo === 'porco' && i % 2 === 1 });
       });
     }
     function escolher(b) {
       const e = b.e, cur = b.cur;
+      if (b.comer) { b.comer = false; b.estado = 'pastando'; b.alvo = null; b.t = 6 + Math.random() * 6; return; } // chegou ao cocho: come
       let soma = 0; for (const s of e.estados) soma += s[1];
       let q = Math.random() * soma, est = e.estados[0];
       for (const s of e.estados) { if ((q -= s[1]) <= 0) { est = s; break; } }
@@ -258,15 +259,22 @@
         if (r < 0.25 && comedor.length) { const o = comedor[Math.floor(Math.random() * comedor.length)]; alvo = sortearPonto(cur, e, { x: (o.pegada[0] + o.pegada[2]) / 2, y: o.pegada[3] + e.raio * 0.6 + 10, r: (o.pegada[2] - o.pegada[0]) / 2 + 10 }); }
         else if (cur.lama && r < 0.55) alvo = sortearPonto(cur, e, { x: cur.lama.cx, y: cur.lama.cy, r: cur.lama.rx * 0.6 });
         else if (b.tipo === 'ovelha' && r < 0.6) { const o = bichos.filter(x => x.cur === cur && x !== b); const m = o.reduce((s, x) => [s[0] + x.x / o.length, s[1] + x.y / o.length], [0, 0]); alvo = sortearPonto(cur, e, { x: m[0], y: m[1], r: 70 }); }
-        else if (b.tipo === 'galinha') alvo = sortearPonto(cur, e, { x: b.x, y: b.y, r: 70 });
-        else alvo = sortearPonto(cur, e, { x: b.x, y: b.y, r: 220 });
+        else if (b.tipo === 'galinha') for (let k = 0; k < 6; k++) { alvo = sortearPonto(cur, e, { x: b.x, y: b.y, r: 70 }); if (alvo && Math.abs(alvo[1] - b.y) < Math.abs(alvo[0] - b.x) + 6) break; }
+        else for (let k = 0; k < 6; k++) { // passeio: mais para os lados do que para cima/baixo (anda de frente, não de lado)
+          alvo = sortearPonto(cur, e, { x: b.x, y: b.y, r: 220 });
+          if (alvo && Math.abs(alvo[1] - b.y) < Math.abs(alvo[0] - b.x) * 0.8 + 10) break;
+        }
         if (alvo && caminhoLivre(cur, e, b.x, b.y, alvo[0], alvo[1])) { b.alvo = alvo; return; }
         b.estado = 'parado'; b.t = 0.6 + Math.random(); return;
       }
       b.t = est[2] + Math.random() * (est[3] - est[2]);
       if (b.estado === 'deitado' && cur.lama) b.sujo = true;
     }
-    function atualizar(dt, agora, grama) {
+    let gente = [];
+    /** tem gente (trabalhador) logo à frente? */
+    const perto = (b, x, y) => gente.some(p => Math.hypot(x - p.x, (y - p.y) * 2) < b.e.raio + 14 && Math.hypot(b.x - p.x, (b.y - p.y) * 2) > Math.hypot(x - p.x, (y - p.y) * 2));
+    function atualizar(dt, agora, grama, pessoas = []) {
+      gente = pessoas;
       for (const b of bichos) {
         const e = b.e, k = Math.min(1, dt * 3);
         // cabeça e corpo mudam devagar (sem pulos)
@@ -275,29 +283,45 @@
         b.deit += ((b.estado === 'deitado' ? 1 : 0) - b.deit) * Math.min(1, dt * 1.2);
         const anda = b.estado === 'andando' && b.deit < 0.08;
         b.andar += ((anda ? 1 : 0) - b.andar) * k * 2;
+        // o corpo gira devagar para o lado em que vai (vis passa de 1 a -1: o bicho vira de frente no meio da volta)
+        const girar = Math.min(Math.abs(b.lado - b.vis), (dt * 2) / e.virar);
+        b.vis += Math.sign(b.lado - b.vis) * girar;
         if (b.estado === 'andando') {
-          if (!anda) continue; // levantando antes de sair
+          if (!anda || b.reservado) continue; // levantando antes de sair
           const [tx, ty] = b.alvo, dx = tx - b.x, dy = ty - b.y, d = Math.hypot(dx, dy);
-          if (d < 2) { escolher(b); continue; }
-          const s = Math.min(d, e.vel * dt);
-          b.x += (dx / d) * s; b.y += (dy / d) * s; b.fase += (s / e.passo) * TAU; b.rastro += s;
-          if (Math.abs(dx) > d * 0.25) b.f = dx > 0 ? 1 : -1;
-          if (e.pisa && b.rastro > 7 && grama) { b.rastro = 0; grama.pisar(b.x, b.y + 2, dx, dy, agora, e.pisa, 6); }
+          if (d < 5) { escolher(b); continue; }
+          // anda sempre para a frente: se o destino ficou para trás, faz a volta; subir ou descer na tela é em diagonal
+          if (Math.sign(dx) !== b.lado && Math.abs(dx) > 14) b.lado = -b.lado;
+          const virando = Math.abs(b.vis - b.lado) > 0.08;
+          const inclAlvo = Math.max(-0.6, Math.min(0.6, Math.atan2(dy, Math.max(1, Math.abs(dx)))));
+          b.incl += (inclAlvo - b.incl) * Math.min(1, dt * 2.2);
+          const ux = b.vis * Math.cos(b.incl), uy = Math.sin(b.incl), un = Math.hypot(ux, uy) || 1;
+          const s = Math.min(d, e.vel * (virando ? 0.4 : 1) * dt), nx = b.x + (ux / un) * s, ny = b.y + (uy / un) * s;
+          if (!livre(b.cur, e, nx, ny) || perto(b, nx, ny)) { escolher(b); continue; }
+          b.x = nx; b.y = ny; b.fase += (s / e.passo) * TAU; b.rastro += s;
+          if (e.pisa && b.rastro > 7 && grama) { b.rastro = 0; grama.pisar(b.x, b.y + 2, ux, uy, agora, e.pisa, 6); }
         } else {
-          b.t -= dt;
-          if (b.t <= 0) escolher(b);
-          if (b.estado === 'pastando' && grama && e.pisa && Math.random() < dt * 0.15) grama.aparar(b.x + b.f * e.larg * 0.9, b.y, 9, 0.75, 4); // o pasto vai ficando rapado onde comem
+          b.incl += (0 - b.incl) * Math.min(1, dt * 2);
+          if (!b.reservado) { b.t -= dt; if (b.t <= 0) escolher(b); }
+          if (b.estado === 'pastando' && grama && e.pisa && Math.random() < dt * 0.15) grama.aparar(b.x + b.lado * e.larg * 0.9, b.y, 9, 0.75, 4); // o pasto vai ficando rapado onde comem
         }
-        // não se sobrepor: empurra devagar quem está perto demais
+        if (b.reservado) continue; // quem está sendo ordenhado/tosquiado não é empurrado
+        // não se sobrepor: quem anda desvia (muda de rumo) de quem está na frente; quem está parado dá uns passinhos
         for (const o of bichos) {
           if (o === b || o.cur !== b.cur) continue;
           // distância em elipse: de lado o corpo é comprido, na frente/atrás (profundidade) bastam alguns px
           const dx = b.x - o.x, dy = (b.y - o.y) * 2.4, d = Math.hypot(dx, dy) || 0.01, min = (e.raio + o.e.raio) * 1.05;
+          if (b.estado === 'andando') { if (d < min && (o.x - b.x) * b.vis > 0) escolher(b); continue; }
           if (d < min) {
             const p = Math.min(1, (min - d) / d) * Math.min(1, dt * 4), nx = b.x + dx * p, ny = b.y + (dy * p) / 2.4;
             if (livre(b.cur, e, nx, ny)) { b.x = nx; b.y = ny; }
             if (b.estado === 'andando' && b.alvo && Math.hypot(b.alvo[0] - o.x, (b.alvo[1] - o.y) * 2.4) < min) escolher(b); // destino ocupado: escolhe outro
           }
+        }
+        // abre caminho para o trabalhador (dá uns passinhos para longe)
+        if (b.estado !== 'andando') for (const p of gente) {
+          const dx = b.x - p.x, dy = (b.y - p.y) * 2, d = Math.hypot(dx, dy) || 0.01, min = e.raio + 16;
+          if (d < min) { const q = Math.min(1, (min - d) / d) * Math.min(1, dt * 3), nx = b.x + dx * q, ny = b.y + (dy * q) / 2; if (livre(b.cur, e, nx, ny)) { b.x = nx; b.y = ny; } }
         }
       }
     }
@@ -305,7 +329,9 @@
       const out = [];
       for (const b of bichos) {
         if (b.x < cam.x - 60 || b.x > cam.x + cam.largura + 60 || b.y < cam.y - 10 || b.y > cam.y + cam.altura + 80) continue;
-        out.push({ y: b.y, desenhar: () => { ctx.save(); ctx.translate(b.x, b.y); ctx.scale(b.f, 1); DESENHO[b.tipo](ctx, b, agora); ctx.restore(); } });
+        // de lado; no meio da volta fica estreito (de frente); descendo/subindo a tela inclina um pouco o corpo
+        const sx = Math.sign(b.vis || b.lado) * (0.4 + 0.6 * Math.abs(b.vis)); // no meio da volta: encurtado, como visto em diagonal
+        out.push({ y: b.y, desenhar: () => { ctx.save(); ctx.translate(b.x, b.y); ctx.scale(sx, 1); ctx.rotate(b.incl * 0.22); DESENHO[b.tipo](ctx, b, agora); ctx.restore(); } });
       }
       return out;
     }
@@ -318,8 +344,18 @@
       return melhor;
     }
     /** reação ao clique: olha para quem chamou e muda de estado */
-    function chamar(b, x) { b.f = x > b.x ? 1 : -1; if (b.estado === 'deitado') return; b.estado = 'parado'; b.t = 2.5; b.alvo = null; }
-    return { bichos, atualizar, extras, bichoEm, chamar, rotulo: b => `${b.nome} · ${b.var === 'galo' ? 'galo' : ROTULO[b.tipo]}` };
+    function chamar(b, x) { b.lado = x > b.x ? 1 : -1; if (b.estado === 'deitado') return; b.estado = 'parado'; b.t = 2.5; b.alvo = null; }
+    /** segura o animal parado (ordenha, tosquia) ou solta de novo */
+    function reservar(b, sim) { b.reservado = sim; if (sim) { b.estado = 'parado'; b.alvo = null; b.t = 999; } else escolher(b); }
+    /** comida servida: os bichos do curral vão até o cocho (cada um num lugar) e comem */
+    function chamarPara(cur, o) {
+      for (const b of bichos) {
+        if (b.cur !== cur || b.reservado || Math.random() < 0.25) continue;
+        const alvo = sortearPonto(cur, b.e, { x: (o.pegada[0] + o.pegada[2]) / 2, y: o.pegada[3] + b.e.raio * 0.5 + 12, r: (o.pegada[2] - o.pegada[0]) / 2 + 16 });
+        if (alvo) { b.estado = 'andando'; b.alvo = alvo; b.comer = true; }
+      }
+    }
+    return { bichos, atualizar, extras, bichoEm, chamar, reservar, chamarPara, rotulo: b => `${b.nome} · ${b.var === 'galo' ? 'galo' : ROTULO[b.tipo]}` };
   }
 
   raiz.Animais = { criar, ESP };

@@ -462,10 +462,35 @@
       }
   }
   recalcularCusto();
-  function rota(ax, ay, bx, by) {
+  // a equipe também anda dentro dos currais (fora da cerca e dos equipamentos); a porteira é atravessada em linha reta
+  const custoDentro = new Float32Array(GX * GY);
+  function montarCustoDentro() {
+    custoDentro.set(custo);
+    for (const cur of C.currais) {
+      const l = cur.l;
+      for (let j = Math.floor(l.y / GC); j <= Math.floor((l.y + l.h) / GC); j++)
+        for (let i = Math.floor(l.x / GC); i <= Math.floor((l.x + l.w) / GC); i++) {
+          const x = i * GC + GC / 2, y = j * GC + GC / 2;
+          if (C.andavelDentro(cur, x, y)) custoDentro[i + j * GX] = 1;
+        }
+    }
+  }
+  montarCustoDentro();
+  /** o ponto andável mais perto (procura em anéis) */
+  function pontoLivre(grade, x, y) {
+    const ci = Math.floor(x / GC), cj = Math.floor(y / GC);
+    if (grade[ci + cj * GX]) return [x, y];
+    for (let r = 1; r < 10; r++) for (let dj = -r; dj <= r; dj++) for (let di = -r; di <= r; di++) {
+      if (Math.max(Math.abs(di), Math.abs(dj)) !== r) continue;
+      const i = ci + di, j = cj + dj;
+      if (i >= 0 && j >= 0 && i < GX && j < GY && grade[i + j * GX]) return [i * GC + GC / 2, j * GC + GC / 2];
+    }
+    return [x, y];
+  }
+  function rota(ax, ay, bx, by, grade = custo) {
     const ini = Math.floor(ax / GC) + Math.floor(ay / GC) * GX;
     let fim = Math.floor(bx / GC) + Math.floor(by / GC) * GX;
-    if (!custo[fim]) return null;
+    if (!grade[fim]) return null;
     const g = new Float32Array(GX * GY).fill(Infinity), de = new Int32Array(GX * GY).fill(-1), fechado = new Uint8Array(GX * GY);
     const fila = [[0, ini]], h = k => { const dx = Math.abs(k % GX - fim % GX), dy = Math.abs(((k / GX) | 0) - ((fim / GX) | 0)); return 0.55 * (Math.max(dx, dy) + 0.414 * Math.min(dx, dy)); };
     const sobe = () => { let i = fila.length - 1; while (i > 0) { const p = (i - 1) >> 1; if (fila[p][0] <= fila[i][0]) break; [fila[p], fila[i]] = [fila[i], fila[p]]; i = p; } };
@@ -479,9 +504,9 @@
       for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
         if (!dx && !dy) continue;
         const ni = i + dx, nj = j + dy; if (ni < 0 || nj < 0 || ni >= GX || nj >= GY) continue;
-        const n = ni + nj * GX; if (!custo[n] || fechado[n]) continue;
-        if (dx && dy && (!custo[i + dx + j * GX] || !custo[i + (j + dy) * GX])) continue;
-        const ng = g[k] + custo[n] * (dx && dy ? 1.414 : 1);
+        const n = ni + nj * GX; if (!grade[n] || fechado[n]) continue;
+        if (dx && dy && (!grade[i + dx + j * GX] || !grade[i + (j + dy) * GX])) continue;
+        const ng = g[k] + grade[n] * (dx && dy ? 1.414 : 1);
         if (ng < g[n]) { g[n] = ng; de[n] = k; fila.push([ng + h(n), n]); sobe(); }
       }
     }
@@ -496,6 +521,9 @@
     }
     return pts;
   }
+  const casaDaEquipe = () => { const e = predios.find(p => p.id === 'casa').e; return [e.porta[0], e.porta[1] + 20]; };
+  const equipe = Trabalhadores.criar({ C, bichos, rota, gradeFora: () => custo, gradeDentro: () => custoDentro, livre: pontoLivre, casa: casaDaEquipe, grama,
+    imagem: pasta => { const i = new Image(); i.src = `../assets/pixellab-staff/${pasta}/sheet.png?v=46`; return i; } });
   function andar(dt, agora) {
     const a = agricultor;
     let resta = 66 * dt;
@@ -573,8 +601,9 @@
     if (!dedos.has(e.pointerId)) return;
     dedos.delete(e.pointerId); tela.classList.remove('arrastando');
     if (gesto && gesto.tipo === 'arrasto' && !gesto.moveu && e.type === 'pointerup') {
-      const wx = cam.x + e.clientX / cam.zoom, wy = cam.y + e.clientY / cam.zoom, pr = predioEm(wx, wy), bi = bichos.bichoEm(wx, wy);
-      if (bi) { bichos.chamar(bi, agricultor.x); avisar(bichos.rotulo(bi)); }
+      const wx = cam.x + e.clientX / cam.zoom, wy = cam.y + e.clientY / cam.zoom, pr = predioEm(wx, wy), bi = bichos.bichoEm(wx, wy), tb = equipe.em(wx, wy);
+      if (tb) avisar(equipe.descricao(tb));
+      else if (bi) { bichos.chamar(bi, agricultor.x); avisar(bichos.rotulo(bi)); }
       else if (pr) { if (pr.nivel < 3) mudarNivel(pr, pr.nivel + 1); else avisar(`${pr.nome} já está no nível máximo (3)`); }
       else {
         const c = rota(agricultor.x, agricultor.y, wx, wy);
@@ -592,6 +621,7 @@
   bVento.onclick = () => { grama.vento = !grama.vento; bVento.setAttribute('aria-pressed', grama.vento); };
   bLonge.onclick = () => { const longe = cam.zoom > zMin + 0.01; ajustarZoom(longe ? zMin : 1, cssW / 2, cssH / 2); bLonge.setAttribute('aria-pressed', longe); };
   document.getElementById('bAgricultor').onclick = () => centrar(agricultor.x, agricultor.y - 30);
+  document.getElementById('bEquipe').onclick = () => { equipe.chamar(); avisar('A equipe está saindo de casa para cuidar dos animais'); };
   let aviso = '', avisoAte = 0;
   function avisar(t) { aviso = t; avisoAte = performance.now() + 2500; }
 
@@ -628,6 +658,7 @@
     const sx = mini.width / W, sy = mini.height / H;
     mctx.strokeStyle = '#ffffff'; mctx.lineWidth = 1.5 * dpr; mctx.strokeRect(cam.x * sx, cam.y * sy, cam.largura * sx, cam.altura * sy);
     mctx.fillStyle = '#ffd35a'; mctx.beginPath(); mctx.arc(agricultor.x * sx, agricultor.y * sy, 3 * dpr, 0, 7); mctx.fill();
+    mctx.fillStyle = '#7fd0ff'; for (const t of equipe.equipe) if (t.visivel) { mctx.beginPath(); mctx.arc(t.x * sx, t.y * sy, 2.4 * dpr, 0, 7); mctx.fill(); }
   }
   let miniArrasto = false;
   const miniIr = e => { const r = mini.getBoundingClientRect(); centrar(((e.clientX - r.left) / r.width) * W, ((e.clientY - r.top) / r.height) * H); };
@@ -728,7 +759,7 @@
     const x0 = Math.min(a[0], b[0]) - 140, y0 = Math.min(a[1], b[1]) - 140, x1 = Math.max(a[2], b[2]) + 140, y1 = Math.max(a[3], b[3]) + 140;
     grama.refazer(x0, y0, x1, y1);
     for (const [k, lad] of ladrilhos) if (lad.tx * T < x1 && lad.tx * T + T > x0 && lad.ty * T < y1 && lad.ty * T + T > y0) ladrilhos.delete(k);
-    recalcularCusto(x0, y0, x1, y1);
+    recalcularCusto(x0, y0, x1, y1); montarCustoDentro();
     if (noPredio(agricultor.x, agricultor.y) < 8) { agricultor.x = p.e.porta[0] + 40; agricultor.y = p.e.porta[1] + 20; agricultor.caminho = []; }
     for (let i = 0; i < 70; i++) {
       const x = b[0] + Math.random() * (b[2] - b[0]);
@@ -770,7 +801,9 @@
     }
     grama.orcamentoMs = !pronto ? 120 : predios.some(p => p.anim) ? 26 : 9; // na obra, o gramado em volta se refaz debaixo da poeira
     andar(dt, agora);
-    bichos.atualizar(dt, agora, grama);
+    C.atualizar(dt);
+    equipe.atualizar(dt, agora);
+    bichos.atualizar(dt, agora, grama, equipe.gente());
 
     const S = cam.escala;
     ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = '#36401e'; ctx.fillRect(0, 0, tela.width, tela.height);
@@ -789,10 +822,11 @@
       }
     if (quadros % 90 === 0) for (const [k, lad] of ladrilhos) if (quadros - lad.visto > 300) ladrilhos.delete(k);
     desenharAgua(cam, agora, dt);
-    const faltaCapim = grama.quadro(ctx, cam, agora, [...extraPonte, ...extrasPredios, ...C.extras(ctx, cam), ...bichos.extras(ctx, cam, agora), extraAgricultor]);
+    const faltaCapim = grama.quadro(ctx, cam, agora, [...extraPonte, ...extrasPredios, ...C.extras(ctx, cam), ...bichos.extras(ctx, cam, agora), ...equipe.extras(ctx, cam, agora), extraAgricultor]);
     ctx.setTransform(S, 0, 0, S, -cam.x * S, -cam.y * S);
     sombras();
     particulas(dt, agora);
+    equipe.rotulos(ctx, cam.zoom);
     if (mostrarLotes) desenharLotes();
     if (aviso && performance.now() < avisoAte) {
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.font = '600 15px system-ui, sans-serif'; ctx.textAlign = 'center';
@@ -813,7 +847,7 @@
 
   // para conferir no console / testes
   window.prototipoMapa = {
-    cam, grama, agricultor, rota, centrar, ajustarZoom, ladrilhos, get pronto() { return pronto; }, get gasto() { return gasto; },
+    cam, grama, agricultor, rota, centrar, ajustarZoom, ladrilhos, equipe, bichos, currais: C, get pronto() { return pronto; }, get gasto() { return gasto; },
     /** desenha n quadros seguidos e espera a placa de vídeo terminar (getImageData): ms por quadro de verdade */
     medir(n = 20) { const i = performance.now(); for (let k = 0; k < n; k++) { desenharQuadro(ultimo + 33.4); ctx.getImageData(0, 0, 1, 1); } return (performance.now() - i) / n; },
   };

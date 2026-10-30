@@ -250,7 +250,7 @@
       if (p.horiz) {
         const y = y1, frente = p.lado === 'sul';
         const tabuas = () => {
-          if (p.porteira) return porteira(g, E, x1, x2, y);
+          if (p.porteira) return;
           if (E.trilhos) for (const [h, t] of E.trilhos) tabuaH(g, x1, x2, y - h, t, E.madeira);
           else if (p.cur.cerca === 'tabuas') {
             const r = sorteio(Math.round(x1 * 7 + y));
@@ -267,11 +267,8 @@
       }
       // lado oeste/leste: na vista de cima-frente o vão vira uma faixa vertical entre os postes
       const x = x1, larg = E.trilhos ? 3.6 : 4.6;
-      if (p.porteira) { // porteira: tábuas mais claras e trinco
-        g.fillStyle = degradeH(g, x - 3, x + 3, [[0, tom('#b58d5f', 1.1)], [1, tom('#b58d5f', 0.7)]]); g.fillRect(x - 3, y1 - E.alt + 4, 6, y2 - y1);
-        for (let yy = y1 + 6; yy < y2 - 2; yy += 9) { g.fillStyle = 'rgba(40,25,10,.35)'; g.fillRect(x - 3, yy - E.alt + 4, 6, 1.2); }
-        g.fillStyle = '#2b2622'; g.fillRect(x - 4, y2 - E.alt + 2, 8, 3);
-      } else if (E.trilhos) for (const [h, t] of E.trilhos) {
+      if (p.porteira) { /* a folha da porteira é um desenho à parte (gira na dobradiça) */ }
+      else if (E.trilhos) for (const [h, t] of E.trilhos) {
         g.fillStyle = degradeH(g, x - larg / 2, x + larg / 2, [[0, tom(E.madeira, 1.15)], [1, tom(E.madeira, 0.72)]]); g.fillRect(x - larg / 2, y1 - h - t / 2, larg, y2 - y1 + t);
       } else if (p.cur.cerca === 'tabuas') {
         g.fillStyle = degradeH(g, x - larg / 2, x + larg / 2, [[0, tom(E.madeira, 1.1)], [1, tom(E.madeira, 0.68)]]); g.fillRect(x - larg / 2, y1 - E.alt + 4, larg, y2 - y1 + E.alt - 4);
@@ -279,14 +276,46 @@
       if (p.primeiro) poste2(x, y1, y1);
       poste2(x, y2, y2);
     }
-    function porteira(g, E, x1, x2, y) { // porteira de fazenda: quadro, travessas e mão-francesa
-      const a = x1 + E.poste * 0.8, b = x2 - E.poste * 0.8, top = y - E.alt + 6, cor = '#b58d5f';
-      if (E === CERCAS.tela) tela(g, a, b, top, y - 4);
-      for (const yy of [top, (top + y - 4) / 2, y - 6]) tabuaH(g, a, b, yy, 5, cor);
-      g.strokeStyle = tom(cor, 0.85); g.lineWidth = 4.5; g.beginPath(); g.moveTo(a + 3, y - 6); g.lineTo(b - 3, top + 2); g.stroke();
-      g.strokeStyle = tom(cor, 1.2, 0.6); g.lineWidth = 1.2; g.beginPath(); g.moveTo(a + 3, y - 7.5); g.lineTo(b - 3, top + 0.5); g.stroke();
-      for (const xx of [a + 2, b - 2]) { g.fillStyle = degradeH(g, xx - 2.5, xx + 2.5, [[0, tom(cor, 1.1)], [1, tom(cor, 0.75)]]); g.fillRect(xx - 2.5, top - 3, 5, y - top - 1); }
-      g.fillStyle = '#2b2622'; g.fillRect(b - 6, (top + y) / 2 - 3, 7, 3);
+    // ---------- porteira que abre e fecha ----------
+    // dobradiça no poste de cima (lados oeste/leste) ou no da esquerda (sul/norte); abre para fora do curral, até 90°
+    const ABERTA = Math.PI / 2 * 0.96, VAO = 64;
+    for (const cur of currais) cur.portao = { ang: 0, alvo: 0 };
+    function folha(cur) {
+      const P = cur.porteira, l = cur.l, s = Math.sin(cur.portao.ang), c = Math.cos(cur.portao.ang);
+      const [H, v] = P.lado === 'oeste' ? [[l.x, P.pos - VAO / 2], [-VAO * s, VAO * c]] : P.lado === 'leste' ? [[l.x + l.w, P.pos - VAO / 2], [VAO * s, VAO * c]]
+        : P.lado === 'sul' ? [[P.pos - VAO / 2, l.y + l.h], [VAO * c, VAO * s]] : [[P.pos - VAO / 2, l.y], [VAO * c, -VAO * s]];
+      return { A: [H[0] + v[0] * 0.09, H[1] + v[1] * 0.09], B: [H[0] + v[0] * 0.93, H[1] + v[1] * 0.93], frente: Math.abs(v[0]) / VAO };
+    }
+    function desenharPorteira(g, cur) { // quadro, travessas, mão-francesa e trinco, em qualquer ângulo
+      const E = CERCAS[cur.cerca], { A, B, frente } = folha(cur), bot = 6, top = E.alt - 5, cor = '#b58d5f', k = 0.78 + 0.32 * frente;
+      const lin = (x0, y0, x1, y1, w, c) => { g.strokeStyle = c; g.lineWidth = w; g.beginPath(); g.moveTo(x0, y0); g.lineTo(x1, y1); g.stroke(); };
+      g.lineCap = 'round';
+      g.fillStyle = 'rgba(20,18,8,.22)'; g.beginPath(); g.moveTo(A[0] + 2, A[1] + 1); g.lineTo(B[0] + 2, B[1] + 1); g.lineTo(B[0] + 4, B[1] + 4); g.lineTo(A[0] + 4, A[1] + 4); g.fill(); // sombra no chão
+      if (E === CERCAS.tela) {
+        g.save(); g.beginPath(); g.moveTo(A[0], A[1] - bot); g.lineTo(B[0], B[1] - bot); g.lineTo(B[0], B[1] - top); g.lineTo(A[0], A[1] - top); g.closePath(); g.clip();
+        tela(g, Math.min(A[0], B[0]) - 2, Math.max(A[0], B[0]) + 2, Math.min(A[1], B[1]) - top, Math.max(A[1], B[1]) - bot); g.restore();
+      }
+      for (const h of [bot + 1, (bot + top) / 2, top]) { lin(A[0], A[1] - h, B[0], B[1] - h, 4.6, tom(cor, k * 0.92)); lin(A[0], A[1] - h - 1.4, B[0], B[1] - h - 1.4, 1.1, tom(cor, k * 1.25, 0.7)); }
+      lin(A[0], A[1] - bot, B[0], B[1] - top, 4.2, tom(cor, k * 0.82)); // mão-francesa
+      for (const P of [A, B]) lin(P[0], P[1] - bot + 1, P[0], P[1] - top - 2, 4.4, tom(cor, k));
+      g.fillStyle = '#2b2622'; g.fillRect(B[0] - 3, B[1] - (bot + top) / 2 - 2, 6, 3.5);
+    }
+    /** porteira: abrir (1) ou fechar (0); devolve se já chegou */
+    function portao(cur, abrir) { cur.portao.alvo = abrir ? ABERTA : 0; return Math.abs(cur.portao.ang - cur.portao.alvo) < 0.01; }
+    function atualizar(dt) { for (const cur of currais) { const p = cur.portao, d = p.alvo - p.ang; p.ang += Math.sign(d) * Math.min(Math.abs(d), dt * 1.9); } }
+    /** onde o trabalhador para do lado de fora e do lado de dentro da porteira */
+    function pontosPorteira(cur) {
+      const P = cur.porteira, l = cur.l;
+      return P.lado === 'oeste' ? { fora: [l.x - 40, P.pos + 12], dentro: [l.x + 36, P.pos + 8], meio: [l.x, P.pos] }
+        : P.lado === 'leste' ? { fora: [l.x + l.w + 40, P.pos + 12], dentro: [l.x + l.w - 36, P.pos + 8], meio: [l.x + l.w, P.pos] }
+        : P.lado === 'sul' ? { fora: [P.pos + 12, l.y + l.h + 44], dentro: [P.pos + 8, l.y + l.h - 28], meio: [P.pos, l.y + l.h] }
+        : { fora: [P.pos + 12, l.y - 30], dentro: [P.pos + 8, l.y + 44], meio: [P.pos, l.y] };
+    }
+    /** chão onde o trabalhador pode andar dentro do curral (longe da cerca e dos equipamentos) */
+    function andavelDentro(cur, x, y) {
+      const l = cur.l;
+      if (x < l.x + 16 || x > l.x + l.w - 16 || y < l.y + 22 || y > l.y + l.h - 10) return false;
+      return cur.objetos.every(o => perto(o, x, y) > 12);
     }
 
     // ---------- chão de cada curral (pintado nos ladrilhos do mapa) ----------
@@ -375,6 +404,14 @@
         const g = c.getContext('2d'); g.setTransform(q, 0, 0, q, -x0 * q, -y0 * q); g.lineCap = 'butt'; g.lineJoin = 'round';
         o.pintar(g, sorteio(Math.round(o.caixa[0] * 3 + o.caixa[1]))); o.cv = c;
       }
+      for (const cur of currais) for (const p of cur.pecas) { // vãos de cerca: também prontos em imagem (só a folha da porteira se mexe)
+        const E = CERCAS[cur.cerca], m = E.poste * 1.5 + 6;
+        p.caixa = [Math.min(p.a[0], p.b[0]) - m, Math.min(p.a[1], p.b[1]) - E.alt - 16, Math.max(p.a[0], p.b[0]) + m, Math.max(p.a[1], p.b[1]) + 6];
+        const [x0, y0, x1, y1] = p.caixa, c = document.createElement('canvas');
+        c.width = Math.ceil((x1 - x0) * q); c.height = Math.ceil((y1 - y0) * q);
+        const g = c.getContext('2d'); g.setTransform(q, 0, 0, q, -x0 * q, -y0 * q);
+        desenharPeca(g, p); p.cv = c;
+      }
     }
     /** pedaços de cerca e equipamentos visíveis, prontos para entrar na ordem de profundidade da grama */
     function extras(ctx, cam) {
@@ -390,8 +427,10 @@
         for (const p of cur.pecas) {
           const yb = Math.max(p.a[1], p.b[1]);
           if (Math.max(p.a[0], p.b[0]) < x0 || Math.min(p.a[0], p.b[0]) > x1 || yb < y0 || yb - 60 > y1) continue;
-          out.push({ y: yb + 0.5, desenhar: () => desenharPeca(ctx, p) });
+          out.push({ y: yb + 0.5, desenhar: () => (p.cv ? ctx.drawImage(p.cv, p.caixa[0], p.caixa[1], p.caixa[2] - p.caixa[0], p.caixa[3] - p.caixa[1]) : desenharPeca(ctx, p)) });
         }
+        const { A, B } = folha(cur);
+        out.push({ y: Math.max(A[1], B[1]) + 0.8, desenhar: () => desenharPorteira(ctx, cur) });
       }
       return out;
     }
@@ -405,7 +444,7 @@
       }
     }
 
-    return { currais, CERCAS, capim, aparado, bloqueia, pintarChao, assar, extras, mini, dentro, perto };
+    return { currais, CERCAS, capim, aparado, bloqueia, pintarChao, assar, extras, mini, dentro, perto, portao, atualizar, pontosPorteira, andavelDentro };
   }
 
   raiz.Currais = { criar };
