@@ -19,7 +19,7 @@
       estados: [['pastando', 0.5, 4, 10], ['andando', 0.3], ['parado', 0.12, 2, 5], ['deitado', 0.08, 10, 22]] },
     porco: { vel: 18, virar: 0.9, giro: 1.5, modelo3d: true, raio: 22, passo: 30, alt: 34, larg: 30, pisa: 0, nomes: ['Toicinho', 'Rosinha', 'Bolota', 'Torresmo', 'Chiquinho'], vars: ['rosa', 'malhado', 'rosa', 'rosa', 'malhado'],
       estados: [['pastando', 0.35, 3, 8], ['andando', 0.35], ['parado', 0.1, 2, 4], ['deitado', 0.2, 12, 26]] },
-    galinha: { vel: 34, virar: 0.3, raio: 9, passo: 12, alt: 30, larg: 12, pisa: 0, nomes: ['Galo Chico', 'Carijó', 'Ruiva', 'Nevada', 'Pretinha', 'Pintadinha', 'Cocó', 'Dona Filó'], vars: ['galo', 'carijo', 'caipira', 'branca', 'preta', 'carijo', 'caipira', 'branca'],
+    galinha: { vel: 34, virar: 0.3, giro: 4.5, modelo3d: true, raio: 9, passo: 12, alt: 30, larg: 12, pisa: 0, nomes: ['Galo Chico', 'Carijó', 'Ruiva', 'Nevada', 'Pretinha', 'Pintadinha', 'Cocó', 'Dona Filó'], vars: ['galo', 'carijo', 'caipira', 'branca', 'preta', 'carijo', 'caipira', 'branca'],
       estados: [['pastando', 0.55, 0.8, 2.6], ['andando', 0.4], ['parado', 0.05, 1, 3]] },
   };
   const ROTULO = { vaca: 'vaca', ovelha: 'ovelha', porco: 'porco', galinha: 'galinha' };
@@ -290,39 +290,61 @@
     desenharItens(g, [...soltas, { prof: base.prof, corpo: true }], corpo, pele, base);
   }
 
-  // ---------- galinha e galo ----------
-  const GALINHA = { branca: ['#f6f2e9', '#e9e2d2'], caipira: ['#a9552f', '#2e2019'], carijo: ['#7b7873', '#3a3836'], preta: ['#2a2725', '#151a22'], galo: ['#b3532a', '#1f3b2a'] };
+  // ---------- galinha e galo em 3D ----------
+  // corpo inclinado (peito para a frente, cauda para cima), asas nos dois lados, cauda em leque (no galo, penas em
+  // foice verde-escuras), pescoço (dourado no galo), cabeça com crista, barbela, bico e olhos, pernas amarelas com
+  // dedos; carijós com pintas presas nas penas. A cabeça desce rápido para bicar.
+  const GALINHA = {
+    branca: { pena: '#f6f2e9', asa: '#e9e2d2', cauda: '#ece5d6', pescoco: '#f6f2e9' },
+    caipira: { pena: '#a9552f', asa: '#8e4425', cauda: '#2e2019', pescoco: '#c06a35' },
+    carijo: { pena: '#7b7873', asa: '#6a6762', cauda: '#3a3836', pescoco: '#86837d' },
+    preta: { pena: '#2a2725', asa: '#221f1e', cauda: '#151a22', pescoco: '#2f2c2a' },
+    galo: { pena: '#b3532a', asa: '#7a2f18', cauda: '#1f3b2a', pescoco: '#e0902f' },
+  };
   function galinha(g, b, agora) {
-    const [pena, cauda] = GALINHA[b.var], galo = b.var === 'galo', s = galo ? 1.25 : 1, r = sorteio(b.sem);
-    g.scale(s, s);
-    sombra(g, 9, 3, 0.3);
-    // pernas amarelas
-    for (const [lx, off] of [[-1.5, 0], [2, 0.5]]) {
-      const a = Math.sin(b.fase + off * TAU) * 0.6 * b.andar, kx = lx + Math.sin(a) * 7, ky = -Math.cos(a) * 0.4;
-      g.strokeStyle = '#d99a2b'; g.lineWidth = 1.5; g.lineCap = 'round'; g.beginPath(); g.moveTo(lx, -8); g.lineTo(kx, ky); g.stroke();
-      g.lineWidth = 0.9; g.beginPath(); g.moveTo(kx - 2, ky); g.lineTo(kx + 2.8, ky); g.stroke();
-    }
-    // cauda
+    const v = GALINHA[b.var], galo = b.var === 'galo', s = galo ? 1.25 : 1, r = sorteio(b.sem);
+    const S = c => [c[0] * s, c[1] * s, c[2] * s];
+    if (!b.pintas) b.pintas = b.var === 'carijo' ? Array.from({ length: 26 }, () => [norm([r() * 2 - 1, r() * 2 - 1, r() * 1.6 - 0.3]), 0.8 + r() * 0.5, '#efede8']) : [];
+    const corpo = [], soltas = [];
+    const base = peca(b, S([0, 0, 12.5]), S([9, 6.6, 7]), 0.18, v.pena, { manchas: b.pintas.map(([u, rr, c]) => [u, rr * s, c]) });
+    corpo.push(base, peca(b, S([5, 0, 11.5]), S([6, 5.8, 6.4]), 0, v.pena));
+    // asas (de cada lado, um pouco mais escuras, com a ponta caída)
+    for (const lado of [-1, 1]) soltas.push(peca(b, S([-0.5, lado * 5.6, 13.5]), S([7, 1.6, 4.2]), 0.22, v.asa, { contorno: true, forca: 0.8, manchas: b.var === 'carijo' ? b.pintas.slice(0, 6).map(([u, rr, c]) => [u, rr * s, c]) : null }));
+    // cauda em leque
     if (galo) {
-      g.lineWidth = 2.2; for (let i = 0; i < 4; i++) { g.strokeStyle = i % 2 ? '#2c5a3a' : '#16261c'; g.beginPath(); g.moveTo(-6, -14); g.quadraticCurveTo(-14 - i * 2, -32 + i * 3, -20 - i, -14 + i * 2); g.stroke(); }
-    } else { g.fillStyle = cauda; for (let i = 0; i < 3; i++) { g.beginPath(); g.ellipse(-8 - i, -19 + i * 2, 2.6, 6.5, -0.5 - i * 0.25, 0, TAU); g.fill(); } }
-    // corpo
-    g.save(); g.beginPath();
-    g.moveTo(8, -12); g.bezierCurveTo(9, -19, 2, -20, -4, -18); g.bezierCurveTo(-9, -17, -11, -12, -8, -8); g.bezierCurveTo(-4, -5, 5, -5, 8, -12); g.closePath();
-    g.fillStyle = pena; g.fill(); g.clip();
-    if (b.var === 'carijo') for (let i = 0; i < 26; i++) { g.fillStyle = 'rgba(240,238,232,.75)'; g.fillRect(-11 + r() * 20, -20 + r() * 15, 1.1, 0.8); }
-    g.fillStyle = tom(pena, 0.82); g.beginPath(); g.ellipse(-1, -12, 6.5, 4, 0.2, 0, TAU); g.fill(); // asa
-    g.strokeStyle = tom(pena, 0.65, 0.7); g.lineWidth = 0.6; for (let i = 0; i < 3; i++) { g.beginPath(); g.moveTo(-6 + i * 2, -11 + i * 0.5); g.lineTo(2 + i, -10 + i * 0.5); g.stroke(); }
-    volume(g, -21, -5, null);
-    g.restore();
-    // pescoço e cabeça (bica o chão)
-    const hx = 7 + b.cab * 5, hy = -19 + b.cab * 14;
-    g.fillStyle = galo ? '#d9822b' : pena; g.beginPath(); g.moveTo(3, -17); g.quadraticCurveTo(hx - 1, hy - 3, hx + 1, hy + 1); g.lineTo(8, -11); g.closePath(); g.fill();
-    g.fillStyle = galo ? '#e0902f' : pena; g.beginPath(); g.arc(hx, hy, 3.4, 0, TAU); g.fill();
-    g.fillStyle = '#d6262b'; for (const [dx, rr] of galo ? [[-2, 2], [0, 2.4], [2, 2]] : [[-1.2, 1.3], [0.2, 1.5], [1.6, 1.3]]) { g.beginPath(); g.arc(hx + dx, hy - 3.6 - rr * 0.3, rr, 0, TAU); g.fill(); }
-    g.beginPath(); g.ellipse(hx + 2.6, hy + 2.6, galo ? 1.6 : 1.1, galo ? 2.4 : 1.7, 0, 0, TAU); g.fill();
-    g.fillStyle = '#e8b13a'; g.beginPath(); g.moveTo(hx + 2.8, hy - 1); g.lineTo(hx + 6, hy + 0.2); g.lineTo(hx + 2.8, hy + 1); g.fill();
-    g.fillStyle = '#1b1414'; g.beginPath(); g.arc(hx + 1, hy - 0.6, 0.75, 0, TAU); g.fill();
+      const raiz = ponto3d(b, S([-7, 0, 16]));
+      soltas.push({ prof: raiz[2] - 3, fn: () => {
+        for (let i = 0; i < 5; i++) {
+          const lado = (i - 2) * 1.6, m = ponto3d(b, S([-15 - i, lado, 30 - i * 2])), p = ponto3d(b, S([-19 - i * 1.5, lado * 1.3, 12 + i * 2]));
+          g.strokeStyle = i % 2 ? '#2c5a3a' : '#16261c'; g.lineWidth = 2.4 * s; g.lineCap = 'round';
+          g.beginPath(); g.moveTo(raiz[0], raiz[1]); g.quadraticCurveTo(m[0], m[1], p[0], p[1]); g.stroke();
+          g.strokeStyle = 'rgba(140,200,160,.35)'; g.lineWidth = 0.8 * s; g.stroke();
+        }
+      } });
+    } else for (let i = 0; i < 3; i++) soltas.push(peca(b, S([-8 - i * 0.6, (i - 1) * 2.4, 18 + i * 0.4]), S([2.6, 1.8, 6.5]), -0.55 - (i - 1) * 0.05, v.cauda, { contorno: true, forca: 0.7 }));
+    // duas pernas com dedos
+    for (const [hy, off] of [[2.4, 0], [-2.4, 0.5]]) {
+      const ang = Math.sin(b.fase + off * TAU) * 0.6 * b.andar, quadril = S([0.5, hy, 8]), pe = soma(quadril, rotY(ang, S([0, 0, -8])));
+      const q1 = ponto3d(b, quadril), p1 = ponto3d(b, pe);
+      soltas.push({ prof: p1[2], fn: () => {
+        g.strokeStyle = '#d99a2b'; g.lineCap = 'round'; g.lineWidth = 1.4 * s; g.beginPath(); g.moveTo(q1[0], q1[1]); g.lineTo(p1[0], p1[1]); g.stroke();
+        g.lineWidth = 0.9 * s; g.beginPath();
+        for (const a of [-0.5, 0, 0.5]) { const d = ponto3d(b, soma(pe, rotZ(a, S([2.6, 0, 0])))); g.moveTo(p1[0], p1[1]); g.lineTo(d[0], d[1]); }
+        const t = ponto3d(b, soma(pe, S([-1.6, 0, 0]))); g.moveTo(p1[0], p1[1]); g.lineTo(t[0], t[1]); g.stroke();
+      } });
+    }
+    // pescoço e cabeça (bica: gira para a frente e para baixo)
+    const pp = -0.15 + b.cab * 1.55, nb = S([6, 0, 15]);
+    const H = c => soma(nb, rotY(pp, S(c)));
+    corpo.push(peca(b, H([1.5, 0, 3]), S([3.6, 3.4, 5]), pp - 0.3, v.pescoco));
+    const hb = H([3, 0, 7.5]), cab = (c, rr, cor, extra) => soltas.push(peca(b, soma(hb, rotY(pp, S(c))), S(rr), pp, cor, extra));
+    cab([0, 0, 0], [3.4, 3, 3.3], v.pescoco, { contorno: true, forca: 0.8 });
+    cab(galo ? [0, 0, 3.6] : [0.4, 0, 3.2], galo ? [3.4, 0.9, 2.6] : [2.4, 0.8, 1.7], '#d6262b', { contorno: true, forca: 0.6 });     // crista
+    cab([2.4, 0, -2.6], galo ? [1.3, 0.9, 2.2] : [0.9, 0.7, 1.5], '#d6262b', { forca: 0.5 });                                       // barbela
+    cab([3.6, 0, -0.2], [1.8, 0.9, 0.8], '#e8b13a', { forca: 0.5 });                                                                 // bico
+    for (const lado of [-1, 1]) cab([1.6, lado * 2.5, 0.8], [0.7, 0.5, 0.7], '#1b1414', { forca: 0, brilho: true });
+    sombraChao(g, b, 9 * s, 6 * s, 0.3);
+    desenharItens(g, [...soltas, { prof: base.prof, corpo: true }], corpo, v.pena, base);
   }
   const DESENHO = { vaca, ovelha, porco, galinha };
 
@@ -459,7 +481,7 @@
     }
     // cada bicho é desenhado numa imagem própria (na resolução da tela) e a imagem vai para o mapa; a pose é refeita em
     // revezamento (metade dos bichos por quadro = 15 poses/s), o lugar acompanha todo quadro: o mesmo visual, metade do custo
-    const CAIXA = { vaca: [-82, -116, 82, 54], ovelha: [-54, -72, 54, 36], porco: [-56, -64, 56, 38], galinha: [-36, -58, 36, 12] };
+    const CAIXA = { vaca: [-82, -116, 82, 54], ovelha: [-54, -72, 54, 36], porco: [-56, -64, 56, 38], galinha: [-40, -62, 40, 32] };
     let quadroN = 0;
     function posar(g, b, agora) { // desenha o bicho com o pé em (b.x, b.y) do mundo
       if (b.e.modelo3d) { DESENHO[b.tipo](g, b, agora); return; }
