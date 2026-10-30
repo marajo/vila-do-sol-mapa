@@ -605,6 +605,76 @@
   let aviso = '', avisoAte = 0;
   function avisar(t) { aviso = t; avisoAte = performance.now() + 2500; }
 
+  // ---------- som, dia/noite e chuva ----------
+  const som = Som.criar();
+  const clima = Clima.criar({
+    trovejar: (perto, atraso) => som.trovejar(perto, atraso),
+    luzes: () => predios.filter(p => !p.e.vazio).map(p => [p.e.porta[0], p.e.porta[1] - 30, p.id === 'casa' ? 170 : 120]),
+  });
+  addEventListener('pointerdown', () => som.ativar(), true); addEventListener('keydown', () => som.ativar(), true); // o navegador só libera o áudio depois de um toque
+  document.addEventListener('click', e => { if (e.target.closest('button, select')) som.menu('clique'); }, true);
+  /** sons do que está acontecendo: bichos chamando de vez em quando, galo cantando, trabalhadores na lida */
+  const SOM_TAREFA = [[/^Colhendo/, 'colher'], [/^Plantando/, 'enxada'], [/^Regando/, 'regar'], [/^(Enchendo|Pondo feno|Servindo)/, 'racao'], [/^Recolhendo/, 'ovos'],
+    [/(bebedouro|água)/, 'agua'], [/^Ordenhando/, 'ordenha'], [/^Tosquiando/, 'tosquia']];
+  let horaAntes = clima.estado.hora;
+  function ouvir(dt) {
+    const noite = clima.noite, h = clima.estado.hora;
+    const amanheceu = horaAntes < 5.4 && h >= 5.4; horaAntes = h;
+    for (const b of bichos.bichos) {
+      if (!b.ativo) continue;
+      const galo = b.var === 'galo';
+      if (galo) {
+        if (amanheceu && !(b.canta > 0)) { b.canta = 1.8; b.cantoEm = 20; } // o galo canta quando o dia clareia
+        if (b.canta > 0 && !b.cantou) { b.cantou = true; som.animal('galo', b.x, b.y); } else if (!(b.canta > 0)) b.cantou = false;
+        continue;
+      }
+      if (b.vozEm === undefined) b.vozEm = 3 + Math.random() * 25;
+      b.vozEm -= dt * (noite > 0.5 ? 0.35 : 1) * (clima.chuva > 0.5 ? 0.6 : 1); // à noite e na chuva quase não fazem barulho
+      if (b.vozEm <= 0) { b.vozEm = (b.tipo === 'galinha' ? 9 : 16) + Math.random() * 30; som.animal(b.tipo, b.x, b.y); }
+    }
+    for (const t of equipe.equipe) {
+      const p = t.atual;
+      if (p !== t.somDe) {
+        t.somDe = p;
+        if (p && p.tipo === 'portao') som.trabalho('porteira', t.x, t.y, p.abrir);
+        else if (p && p.tipo === 'tarefa') { const m = SOM_TAREFA.find(([r]) => r.test(p.texto)); if (m) som.trabalho(m[1], t.x, t.y, p.dur); }
+      }
+      if (t.visivel && t.pose === 'andando') { t.passoSom = (t.passoSom || 0) - dt; if (t.passoSom <= 0) { t.passoSom = 0.42; som.trabalho('passo', t.x, t.y); } }
+    }
+    const cx = cam.x + cam.largura / 2, cy = cam.y + cam.altura / 2;
+    som.quadro(cam, noite, clima.chuva, Math.max(0, rio.margem(cx, Math.max(0, Math.min(H, cy)))), dt);
+  }
+
+  // ---------- opções: volumes e clima (guardado à parte, não mexe no progresso do jogo) ----------
+  const CHAVE_OPCOES = 'vila-do-sol-prototipo-opcoes';
+  const opcoes = document.getElementById('opcoes'), bOpcoes = document.getElementById('bOpcoes');
+  function guardarOpcoes() {
+    try { localStorage.setItem(CHAVE_OPCOES, JSON.stringify({ som: som.vol, hora: clima.estado.modoHora, chuva: clima.estado.modoChuva })); } catch (e) { /* sem armazenamento: vale só nesta visita */ }
+  }
+  try {
+    const o = JSON.parse(localStorage.getItem(CHAVE_OPCOES) || 'null');
+    if (o) { for (const k in Som.PADRAO) if (o.som && typeof o.som[k] === typeof Som.PADRAO[k]) som.vol[k] = o.som[k]; if (o.hora) clima.estado.modoHora = o.hora; if (o.chuva) clima.estado.modoChuva = o.chuva; }
+  } catch (e) { /* opções estragadas ou bloqueadas: fica o padrão */ }
+  for (const el of opcoes.querySelectorAll('[data-vol]')) {
+    const k = el.dataset.vol, saida = el.parentElement.querySelector('output');
+    el.value = Math.round(som.vol[k] * 100); saida.textContent = el.value + '%';
+    el.oninput = () => { som.definir(k, el.value / 100); saida.textContent = el.value + '%'; };
+    el.onchange = () => { guardarOpcoes(); if (k !== 'ambiente') som.menu('clique'); };
+  }
+  const somLigado = document.getElementById('somLigado'), selHora = document.getElementById('selHora'), selChuva = document.getElementById('selChuva');
+  somLigado.checked = som.vol.ligado; somLigado.onchange = () => { som.definir('ligado', somLigado.checked); guardarOpcoes(); };
+  selHora.value = clima.estado.modoHora; selChuva.value = clima.estado.modoChuva;
+  selHora.onchange = () => { clima.estado.modoHora = selHora.value; guardarOpcoes(); };
+  selChuva.onchange = () => { clima.estado.modoChuva = selChuva.value; guardarOpcoes(); };
+  function abrirOpcoes(abrir) {
+    opcoes.hidden = !abrir; bOpcoes.setAttribute('aria-expanded', String(abrir));
+    setTimeout(() => som.menu(abrir ? 'abrir' : 'fechar'), 0);
+  }
+  bOpcoes.onclick = e => { e.stopPropagation(); abrirOpcoes(opcoes.hidden); };
+  document.getElementById('bFecharOpcoes').onclick = () => abrirOpcoes(false);
+  addEventListener('keydown', e => { if (e.key === 'Escape' && !opcoes.hidden) abrirOpcoes(false); });
+  const relogio = document.getElementById('relogio');
+
   // ---------- mapa pequeno ----------
   const mini = document.getElementById('mini'), mctx = mini.getContext('2d');
   let miniBase = null, miniW = 0, miniH = 0;
@@ -747,6 +817,7 @@
       const x = z[0] + Math.random() * (z[2] - z[0]);
       poeira.push({ x, y: z[3] - 4 - Math.random() * 20, vx: (x - (z[0] + z[2]) / 2) * 0.25 + (Math.random() - 0.5) * 30, vy: -14 - Math.random() * 26, vida: -Math.random() * 0.5, dura: 1.4 + Math.random() * 1.2, r: 9 + Math.random() * 14 });
     }
+    som.menu(n > velho.e.nivel ? 'obra' : 'fechar'); if (n > velho.e.nivel) setTimeout(() => som.menu('nivel'), 600);
     pintarMini(); atualizarBotoes();
     avisar(n === 0 ? `${p.nome}: terreno vazio (nível 0)` : `${p.nome} ${n > velho.e.nivel ? (velho.e.vazio ? 'construído:' : 'evoluiu para') : 'voltou para'} nível ${n}`);
   }
@@ -763,6 +834,7 @@
     for (const [k, lad] of ladrilhos) if (lad.tx * T < x1 && lad.tx * T + T > x0 && lad.ty * T < y1 && lad.ty * T + T > y0) ladrilhos.delete(k);
     recalcularCusto(x0, y0, x1, y1); montarCustoDentro();
     for (const t of equipe.equipe) if (t.visivel && t.cur !== cur && C.bloqueia(t.x, t.y)) { const f = C.pontosPorteira(cur).fora; t.x = f[0]; t.y = f[1]; t.caminho = null; }
+    som.menu(n > de ? 'nivel' : 'fechar');
     pintarMini(); atualizarBotoes();
     const qtd = bichos.bichos.filter(x => x.cur === cur && x.ativo).length, itens = cur.objetos.filter(o => o.tipo === 'arvore' || o.tipo === 'canteiro').length;
     const conta = qtd ? `${qtd} animais` : id === 'horta' ? `${itens} canteiros` : `${itens} árvores`;
@@ -805,6 +877,7 @@
     C.atualizar(dt);
     equipe.atualizar(dt, agora);
     bichos.atualizar(dt, agora, grama, equipe.gente());
+    clima.atualizar(dt); ouvir(dt);
 
     const S = cam.escala;
     ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = '#36401e'; ctx.fillRect(0, 0, tela.width, tela.height);
@@ -827,6 +900,7 @@
     ctx.setTransform(S, 0, 0, S, -cam.x * S, -cam.y * S);
     sombras();
     particulas(dt, agora);
+    clima.desenhar(ctx, cam, S, dpr, cssW, cssH, dt, agora); ctx.setTransform(S, 0, 0, S, -cam.x * S, -cam.y * S);
     equipe.rotulos(ctx, cam.zoom);
     if (mostrarLotes) desenharLotes();
     if (aviso && performance.now() < avisoAte) {
@@ -841,6 +915,7 @@
     gasto = gasto * 0.9 + (performance.now() - ini) * 0.1;
     if (quadros % 15 === 0) {
       const e = grama.estat;
+      const ce = clima.estado; relogio.textContent = `${clima.noite > 0.5 ? '🌙' : ce.hora > 17 || ce.hora < 7.2 ? '🌅' : '☀️'} ${clima.relogio()}${clima.chuva > 0.15 ? ' · chovendo' : ''}`;
       medidor.textContent = `${gasto.toFixed(1)} ms/quadro · zoom ${cam.zoom.toFixed(2)} · capim ${e.desenhados}/${e.comDados} pedaços · chão ${ladrilhos.size}`;
     }
   }
@@ -848,7 +923,7 @@
 
   // para conferir no console / testes
   window.prototipoMapa = {
-    cam, grama, agricultor, rota, centrar, ajustarZoom, ladrilhos, equipe, bichos, currais: C, get pronto() { return pronto; }, get gasto() { return gasto; },
+    cam, grama, agricultor, rota, centrar, ajustarZoom, ladrilhos, equipe, bichos, currais: C, som, clima, get pronto() { return pronto; }, get gasto() { return gasto; },
     /** desenha n quadros seguidos e espera a placa de vídeo terminar (getImageData): ms por quadro de verdade */
     medir(n = 20) { const i = performance.now(); for (let k = 0; k < n; k++) { desenharQuadro(ultimo + 33.4); ctx.getImageData(0, 0, 1, 1); } return (performance.now() - i) / n; },
   };

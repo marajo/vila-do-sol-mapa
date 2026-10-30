@@ -23,6 +23,20 @@
     .niveis button[aria-pressed="true"] { background: #f0b04a; }
     #mini { right: 12px; bottom: 12px; width: 250px; height: 144px; padding: 0; cursor: pointer; touch-action: none; }
     #medidor { left: 12px; bottom: 12px; padding: 5px 9px; font: 11px ui-monospace, Consolas, monospace; opacity: .85; }
+    #relogio { top: 12px; right: 12px; padding: 5px 11px; font-size: 13px; font-variant-numeric: tabular-nums; }
+    #opcoes { top: 50%; left: 50%; transform: translate(-50%, -50%); width: min(340px, calc(100vw - 32px)); max-height: calc(100vh - 32px); overflow: auto; padding: 12px 16px 14px; z-index: 5; background: rgba(28, 34, 18, .94); }
+    #opcoes[hidden] { display: none; }
+    #opcoes header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+    #opcoes header b { font-size: 16px; }
+    #opcoes header button { font: inherit; font-size: 15px; width: 30px; height: 30px; border: 0; border-radius: 50%; background: #e9e1bf; color: #2b2a17; cursor: pointer; }
+    #opcoes h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; opacity: .7; margin: 12px 0 4px; }
+    #opcoes .linha { display: flex; gap: 8px; align-items: center; cursor: pointer; }
+    #opcoes .vol { display: grid; grid-template-columns: 1fr 120px 40px; align-items: center; gap: 8px; margin: 6px 0; }
+    #opcoes .vol label small { display: block; opacity: .65; font-size: 11px; }
+    #opcoes .vol select { grid-column: 2 / 4; font: inherit; font-size: 12px; border: 0; border-radius: 7px; padding: 4px 6px; background: #e9e1bf; color: #2b2a17; }
+    #opcoes input[type=range] { width: 100%; accent-color: #b7d574; }
+    #opcoes output { text-align: right; font-variant-numeric: tabular-nums; opacity: .85; }
+    #opcoes .nota { display: block; margin-top: 10px; opacity: .65; font-size: 11px; }
     #carregando { left: 50%; top: 50%; transform: translate(-50%, -50%); padding: 12px 18px; font-size: 15px; }
     @media (max-width: 900px), (max-height: 500px) {
       #painel { top: 6px; left: 6px; padding: 6px 9px; max-width: 290px; }
@@ -32,6 +46,7 @@
       .botoes button { font-size: 11px; padding: 4px 8px; }
       #mini { width: 170px; height: 98px; right: 6px; bottom: 6px; }
       #medidor { left: 6px; bottom: 6px; }
+      #relogio { top: 6px; right: 6px; font-size: 11px; padding: 4px 8px; }
     }
   </style>
 </head>
@@ -46,6 +61,7 @@
       <button id="bLonge" aria-pressed="false">Ver mais longe</button>
       <button id="bAgricultor">Achar o agricultor</button>
       <button id="bEquipe">Chamar a equipe</button>
+      <button id="bOpcoes" aria-expanded="false" aria-controls="opcoes">Opções</button>
     </div>
     <div class="niveis">
       <label for="selEvoluir">Evoluir</label>
@@ -58,16 +74,33 @@
     </div>
     <small class="ajuda">Arraste para andar pelo mapa · roda do mouse ou pinça para zoom · clique no chão e o agricultor vai até lá (depois volta para a horta) · a equipe sai de casa e cuida dos animais sozinha · clique num animal ou trabalhador para ver o nome · escolha o que evoluir e o nível (protótipo: sem custo de moedas)</small>
   </div>
+  <div id="relogio" class="caixa" aria-live="off"></div>
+  <section id="opcoes" class="caixa" hidden aria-label="Opções">
+    <header><b>Opções</b><button id="bFecharOpcoes" aria-label="Fechar opções">✕</button></header>
+    <label class="linha"><input type="checkbox" id="somLigado"> Som ligado</label>
+    <h3>Volume</h3>
+    <div class="vol"><label for="vGeral">Geral</label><input id="vGeral" type="range" min="0" max="100" data-vol="geral"><output></output></div>
+    <div class="vol"><label for="vAmb">Ambiente <small>vento, rio, pássaros, grilos, chuva</small></label><input id="vAmb" type="range" min="0" max="100" data-vol="ambiente"><output></output></div>
+    <div class="vol"><label for="vAni">Animais</label><input id="vAni" type="range" min="0" max="100" data-vol="animais"><output></output></div>
+    <div class="vol"><label for="vTra">Trabalhadores <small>porteira, enxada, rega, passos</small></label><input id="vTra" type="range" min="0" max="100" data-vol="trabalho"><output></output></div>
+    <div class="vol"><label for="vMenu">Menu <small>botões e evoluções</small></label><input id="vMenu" type="range" min="0" max="100" data-vol="menu"><output></output></div>
+    <h3>Tempo</h3>
+    <div class="vol"><label for="selHora">Hora do dia</label><select id="selHora"><option value="auto">Passando (1 dia = 6 min)</option><option value="dia">Sempre dia</option><option value="noite">Sempre noite</option></select></div>
+    <div class="vol"><label for="selChuva">Chuva</label><select id="selChuva"><option value="auto">De vez em quando</option><option value="sim">Chovendo</option><option value="nao">Sem chuva</option></select></div>
+    <small class="nota">O som começa depois do primeiro toque na tela. As opções ficam guardadas neste navegador.</small>
+  </section>
   <canvas id="mini" class="caixa" aria-label="Mapa inteiro: toque para ir até um lugar"></canvas>
   <div id="medidor" class="caixa"></div>
   <div id="carregando" class="caixa">Plantando o capim…</div>
-  <script src="layout.js?v=31"></script>
-  <script src="grama.js?v=31"></script>
-  <script src="construcoes.js?v=31"></script>
-  <script src="plantas.js?v=31"></script>
-  <script src="currais.js?v=31"></script>
-  <script src="animais.js?v=31"></script>
-  <script src="trabalhadores.js?v=31"></script>
-  <script src="mapa.js?v=31"></script>
+  <script src="layout.js?v=33"></script>
+  <script src="grama.js?v=33"></script>
+  <script src="construcoes.js?v=33"></script>
+  <script src="plantas.js?v=33"></script>
+  <script src="currais.js?v=33"></script>
+  <script src="animais.js?v=33"></script>
+  <script src="som.js?v=33"></script>
+  <script src="clima.js?v=33"></script>
+  <script src="trabalhadores.js?v=33"></script>
+  <script src="mapa.js?v=33"></script>
 </body>
 </html>
