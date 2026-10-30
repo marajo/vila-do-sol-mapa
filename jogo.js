@@ -23,8 +23,15 @@
     milho: { nome: 'Milho', icone: '🌽', preco: 30, xp: 4 }, abobora: { nome: 'Abóbora', icone: '🎃', preco: 45, xp: 6 },
     morango: { nome: 'Morango', icone: '🍓', preco: 65, xp: 7 }, girassol: { nome: 'Girassol', icone: '🌻', preco: 120, xp: 10 },
   };
+  /** sementes da loja: preço do pacote (1 canteiro) e nível pedido */
+  const SEMENTES = { alface: { preco: 3, pede: 1 }, cenoura: { preco: 5, pede: 1 }, couve: { preco: 6, pede: 2 }, milho: { preco: 12, pede: 2 },
+    tomate: { preco: 10, pede: 3 }, abobora: { preco: 18, pede: 4 }, morango: { preco: 25, pede: 5 }, girassol: { preco: 45, pede: 6 } };
+  /** animais da loja, por curral */
+  const ANIMAIS = { galinheiro: { nome: 'Galinha', icone: '🐔', preco: 40 }, porcos: { nome: 'Porco', icone: '🐷', preco: 90 },
+    ovelhas: { nome: 'Ovelha', icone: '🐑', preco: 140 }, vacas: { nome: 'Vaca', icone: '🐄', preco: 220 } };
   const ANTIGOS = ['cenoura', 'milho', 'morango', 'girassol']; // ordem da sacola (bag) do jogo atual
-  const novo = () => ({ versao: 1, moedas: 150, xp: 0, niveis: { casa: 1, celeiro: 0, horta: 0, galinheiro: 0, pomar: 0, porcos: 0, ovelhas: 0, vacas: 0 }, armazem: {}, vendidos: 0, colheitas: 0, importado: false });
+  const novo = () => ({ versao: 1, moedas: 150, xp: 0, niveis: { casa: 1, celeiro: 0, horta: 0, galinheiro: 0, pomar: 0, porcos: 0, ovelhas: 0, vacas: 0 }, armazem: {}, vendidos: 0, colheitas: 0, importado: false,
+    sementes: { cenoura: 6, alface: 4 }, plantio: 'cenoura', animais: {}, decor: [] });
   const inteiro = (v, a, b, p) => Number.isFinite(+v) ? Math.max(a, Math.min(b, Math.floor(+v))) : p;
 
   function criar(armazenamento = raiz.localStorage) {
@@ -32,7 +39,10 @@
     let e = novo(), origem = 'novo';
     const salvo = ler(CHAVE);
     if (salvo && salvo.versao === 1 && salvo.niveis) {
-      e = { ...e, ...salvo, niveis: { ...e.niveis, ...salvo.niveis }, armazem: { ...salvo.armazem } };
+      e = { ...e, ...salvo, niveis: { ...e.niveis, ...salvo.niveis }, armazem: { ...salvo.armazem }, sementes: { ...(salvo.sementes || e.sementes) } };
+      if (!SEMENTES[e.plantio]) e.plantio = 'cenoura';
+      if (!salvo.animais) { e.animais = {}; for (const k in ANIMAIS) if (salvo.niveis[k] > 0) e.animais[k] = 1; } // salvamento da etapa 1: um bicho por curral feito
+      e.decor = Array.isArray(e.decor) ? e.decor.filter(d => d && typeof d.k === 'string' && Number.isFinite(d.x) && Number.isFinite(d.y)) : [];
       e.moedas = inteiro(e.moedas, 0, 1e9, 150); e.xp = inteiro(e.xp, 0, 1e9, 0);
       for (const k in OBRAS) e.niveis[k] = inteiro(e.niveis[k], k === 'casa' ? 1 : 0, 3, k === 'casa' ? 1 : 0);
       origem = 'salvo';
@@ -63,7 +73,9 @@
     function evoluir(id) {
       const p = proximo(id); if (!p.ok) return null;
       const antes = nivelJogador();
-      e.moedas -= p.custo; e.niveis[id] = p.n; e.xp += Math.round(p.custo / 10); salvar();
+      e.moedas -= p.custo; e.niveis[id] = p.n; e.xp += Math.round(p.custo / 10);
+      if (p.n === 1 && ANIMAIS[id]) e.animais[id] = Math.max(1, e.animais[id] || 0); // curral novo vem com um bicho
+      salvar();
       return { n: p.n, subiu: nivelJogador() > antes };
     }
     /** colheita entra no armazém; devolve se o jogador subiu de nível */
@@ -86,7 +98,28 @@
       e.moedas += ganho; if (ganho) salvar();
       return ganho;
     }
-    return { estado: e, origem, salvar, get podeSalvar() { return podeSalvar; }, nivelJogador, xpNoNivel: () => e.xp % 100, proximo, evoluir, guardar, vender, precoVenda, bonusVenda, nivel: id => e.niveis[id] };
+    const motivoNivel = pede => nivelJogador() < pede ? `Precisa do nível ${pede}` : '';
+    function comprarSemente(k, n = 1) {
+      const sm = SEMENTES[k]; if (!sm) return 'Semente desconhecida';
+      const m = motivoNivel(sm.pede); if (m) return m;
+      if (e.moedas < sm.preco * n) return `Faltam ${sm.preco * n - e.moedas} moedas`;
+      e.moedas -= sm.preco * n; e.sementes[k] = (e.sementes[k] || 0) + n; salvar(); return '';
+    }
+    /** o agricultor gasta um pacote para plantar um canteiro */
+    function usarSemente(k) { if (!(e.sementes[k] > 0)) return false; e.sementes[k]--; salvar(); return true; }
+    /** cap = quantos cabem no curral agora */
+    function comprarAnimal(id, cap) {
+      const a = ANIMAIS[id]; if (!a) return 'Animal desconhecido';
+      if (!e.niveis[id]) return `Construa o ${NOMES[id].toLowerCase()} primeiro`;
+      if ((e.animais[id] || 0) >= cap) return 'O curral está cheio: evolua para caber mais';
+      if (e.moedas < a.preco) return `Faltam ${a.preco - e.moedas} moedas`;
+      e.moedas -= a.preco; e.animais[id] = (e.animais[id] || 0) + 1; e.xp += Math.round(a.preco / 10); salvar(); return '';
+    }
+    /** item = { id, preco, pede } do catálogo de decorações */
+    function podeDecor(item) { return motivoNivel(item.pede) || (e.moedas < item.preco ? `Faltam ${item.preco - e.moedas} moedas` : ''); }
+    function comprarDecor(item, x, y) { const m = podeDecor(item); if (m) return m; e.moedas -= item.preco; e.xp += Math.round(item.preco / 10); e.decor.push({ k: item.id, x: Math.round(x), y: Math.round(y) }); salvar(); return ''; }
+    return { comprarSemente, usarSemente, comprarAnimal, podeDecor, comprarDecor, motivoNivel,
+      estado: e, origem, salvar, get podeSalvar() { return podeSalvar; }, nivelJogador, xpNoNivel: () => e.xp % 100, proximo, evoluir, guardar, vender, precoVenda, bonusVenda, nivel: id => e.niveis[id] };
   }
-  raiz.Jogo = { criar, CHAVE, NOMES, OBRAS, PRODUTOS };
+  raiz.Jogo = { criar, CHAVE, NOMES, OBRAS, PRODUTOS, SEMENTES, ANIMAIS };
 })(typeof self !== 'undefined' ? self : globalThis);

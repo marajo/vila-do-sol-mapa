@@ -13,7 +13,7 @@
   ];
   const TONS_TABOA = [['#1d2d1c', '#36502f', '#5e7c47'], ['#223320', '#3f5a35', '#6a8851'], ['#283a23', '#47633b', '#76935a']];
   // pedaços de 300 px: metade das chamadas de desenho por quadro (e menos sobra transparente nas laterais)
-  const FAIXA = 16, LARG = 300, MARGEM = 20, CEL_MOITA = 100;
+  const FAIXA = 16, LARG = 300, MARGEM = 20, CEL_MOITA = 100, PLACA = 512;
   // campos de cada haste no Float32Array
   const X = 0, Y = 1, ALT = 2, INCL = 3, LRG = 4, TOM = 5, F = 6, ANG = 7, T0 = 8, DUR = 9, CAB = 10, NC = 11;
 
@@ -45,6 +45,7 @@
       this.cols = Math.ceil(this.W / LARG); this.rows = Math.ceil((this.H + 8) / FAIXA);
       this.ped = new Array(this.cols * this.rows);
       this.fila = []; this.quadroN = 0;
+      this.placas = new Map(); this.longe = false; // modo longe: o capim vira placas prontas de PLACA × PLACA
       this.estat = { pedacos: 0, desenhados: 0, comDados: 0 };
     }
 
@@ -147,6 +148,7 @@
       const d = p.d, maxTom = this.nGrama - 1;
       let ainda = false;
       p.mexido = false; p.sujo = false;
+      if (this.placas.size) this.sujarPlacas(p);
       for (let i = 0, o = 0; i < p.n; i++, o += NC) {
         const f = this.forca(d, o, agora), x = d[o + X], y = d[o + Y], alt = d[o + ALT], incl = d[o + INCL], tom = d[o + TOM];
         if (f > 0.01) {
@@ -225,7 +227,65 @@
      * cam = { x, y, largura, altura (mundo), escala (pontos de tela por px do mundo) }. agora em segundos.
      * extras: [{ y, desenhar() }] em coordenadas do mundo (a câmera já está aplicada).
      */
+    /** placas que mostram este pedaço precisam ser refeitas */
+    sujarPlacas(p) {
+      const x0 = p.x0 - MARGEM, x1 = p.x0 + LARG + MARGEM, y0 = p.y0 - p.topo - 2, y1 = p.y0 + FAIXA + 2;
+      for (let ty = Math.floor(y0 / PLACA); ty <= Math.floor(y1 / PLACA); ty++)
+        for (let tx = Math.floor(x0 / PLACA); tx <= Math.floor(x1 / PLACA); tx++) { const pl = this.placas.get(tx + ',' + ty); if (pl) pl.suja = true; }
+    }
+    /** monta uma placa juntando as faixas de capim que aparecem nela (todas precisam estar desenhadas) */
+    montarPlaca(tx, ty, q, pl) {
+      const X = tx * PLACA, Y = ty * PLACA, l0 = Math.max(0, Math.floor(Y / FAIXA) - 1), l1 = Math.min(this.rows - 1, Math.floor((Y + PLACA + this.altTaboa + 6) / FAIXA));
+      const c0 = Math.max(0, Math.floor((X - MARGEM) / LARG)), c1 = Math.min(this.cols - 1, Math.floor((X + PLACA + MARGEM) / LARG));
+      for (let l = l0; l <= l1; l++) for (let c = c0; c <= c1; c++) { const p = this.ped[c + l * this.cols]; if (!p || !p.d || (p.n && (!p.cv || p.sujo))) return null; }
+      const px = Math.round(PLACA * q);
+      if (!pl) pl = { cv: document.createElement('canvas') };
+      if (pl.cv.width !== px) { pl.cv.width = px; pl.cv.height = px; }
+      const g = pl.cv.getContext('2d'); g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, px, px);
+      g.setTransform(q, 0, 0, q, -X * q, -Y * q);
+      for (let l = l0; l <= l1; l++) for (let c = c0; c <= c1; c++) {
+        const p = this.ped[c + l * this.cols]; if (!p.cv) continue;
+        p.visto = this.quadroN;
+        g.drawImage(p.cv, p.x0 - MARGEM, p.y0 - p.topo - 2, LARG + MARGEM * 2, FAIXA + p.topo + 4);
+      }
+      pl.q = q; pl.suja = false;
+      return pl;
+    }
+    /** de longe: capim em placas prontas (poucas cópias por quadro, sem balanço) e os desenhos por cima, pela altura do pé */
+    quadroLonge(ctx, cam, agora, extras) {
+      const S = cam.escala, inicio = performance.now(), q = S <= 0.55 ? 0.5 : S <= 0.8 ? 0.75 : 1;
+      this.quadroN++;
+      let faltam = 0, refeitas = 0;
+      const tx0 = Math.floor(cam.x / PLACA), tx1 = Math.floor((cam.x + cam.largura) / PLACA), ty0 = Math.floor(cam.y / PLACA), ty1 = Math.floor((cam.y + cam.altura + this.altTaboa) / PLACA);
+      // faltando faixa: gera e desenha dentro do orçamento
+      const l0 = Math.max(0, Math.floor(ty0 * PLACA / FAIXA) - 1), l1 = Math.min(this.rows - 1, Math.floor(((ty1 + 1) * PLACA + this.altTaboa + 6) / FAIXA));
+      const c0 = Math.max(0, Math.floor((tx0 * PLACA - MARGEM) / LARG)), c1 = Math.min(this.cols - 1, Math.floor(((tx1 + 1) * PLACA + MARGEM) / LARG));
+      for (let l = l0; l <= l1; l++) for (let c = c0; c <= c1; c++) {
+        const p = this.pedaco(c, l); p.visto = this.quadroN;
+        if (!p.d) { if (performance.now() - inicio > this.orcamentoMs) { faltam++; continue; } this.gerar(p); }
+        if (p.n && (!p.cv || p.sujo || p.cq < q)) { if (performance.now() - inicio > this.orcamentoMs) { faltam++; continue; } this.desenhar(p, agora); }
+      }
+      const limite = performance.now() + 1.5;
+      for (let n = 0; n < this.porQuadro && this.fila.length && (n < 2 || performance.now() < limite); n++) { const p = this.fila.shift(); if (p.cv && p.d) this.desenhar(p, agora); else p.mexido = false; }
+      ctx.setTransform(S, 0, 0, S, -cam.x * S, -cam.y * S);
+      for (let ty = ty0; ty <= ty1; ty++) for (let tx = tx0; tx <= tx1; tx++) {
+        if (tx < 0 || ty < 0 || tx * PLACA >= this.W || ty * PLACA >= this.H + 8) continue;
+        const k = tx + ',' + ty;
+        let pl = this.placas.get(k);
+        if ((!pl || pl.suja || pl.q !== q) && (!pl || refeitas < 3) && performance.now() - inicio < this.orcamentoMs + 4) {
+          const novo = this.montarPlaca(tx, ty, q, pl); if (novo) { pl = novo; this.placas.set(k, pl); refeitas++; } else if (!pl) faltam++;
+        }
+        if (pl) { pl.visto = this.quadroN; ctx.drawImage(pl.cv, tx * PLACA, ty * PLACA, PLACA, PLACA); }
+      }
+      if (this.quadroN % 60 === 0) for (const [k, pl] of this.placas) if (this.quadroN - pl.visto > 200) this.placas.delete(k);
+      for (const e of [...extras].sort((a, b) => a.y - b.y)) { ctx.setTransform(S, 0, 0, S, -cam.x * S, -cam.y * S); e.desenhar(); }
+      ctx.setTransform(S, 0, 0, S, -cam.x * S, -cam.y * S);
+      return faltam;
+    }
+
     quadro(ctx, cam, agora, extras = []) {
+      if (this.longe) return this.quadroLonge(ctx, cam, agora, extras);
+      if (this.placas.size) this.placas.clear();
       const S = cam.escala, inicio = performance.now();
       this.quadroN++;
       const l0 = Math.max(0, Math.floor(cam.y / FAIXA)), l1 = Math.min(this.rows - 1, Math.floor((cam.y + cam.altura + this.altTaboa + 6) / FAIXA));

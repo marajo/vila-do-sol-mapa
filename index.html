@@ -35,6 +35,24 @@
     .dlg header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
     .dlg header b { font-size: 16px; }
     .dlg header button { font: inherit; font-size: 15px; width: 30px; height: 30px; border: 0; border-radius: 50%; background: #e9e1bf; color: #2b2a17; cursor: pointer; }
+    .botoes .destaque { background: #f0b04a; font-weight: 600; }
+    #lojaDlg { width: min(460px, calc(100vw - 32px)); }
+    .abas { display: flex; gap: 4px; margin-bottom: 8px; }
+    .abas button { flex: 1; font: inherit; font-size: 13px; border: 0; border-radius: 8px; padding: 6px; background: rgba(255,245,210,.1); color: #f4efd9; cursor: pointer; }
+    .abas button[aria-selected="true"] { background: #e9e1bf; color: #2b2a17; font-weight: 600; }
+    #lojaCorpo .dica { display: block; opacity: .7; margin-bottom: 8px; }
+    .lista { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+    .lista li { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; background: rgba(255,245,210,.07); border-radius: 9px; padding: 6px 8px; }
+    .lista .ic { font-size: 22px; width: 28px; text-align: center; }
+    .lista .nm { flex: 1; min-width: 120px; }
+    .lista small { display: block; opacity: .65; font-size: 11px; }
+    .lista button { font: inherit; font-size: 12px; border: 0; border-radius: 999px; padding: 5px 9px; background: #b7d574; color: #22301a; cursor: pointer; }
+    .lista button.leve { background: #e9e1bf; }
+    .lista button.marcado { background: #f0b04a; }
+    .lista button:disabled:not(.marcado) { background: #8a8670; cursor: default; }
+    #colocando { left: 50%; top: 64px; transform: translateX(-50%); padding: 7px 8px 7px 14px; display: flex; gap: 10px; align-items: center; z-index: 4; }
+    #colocando[hidden] { display: none; }
+    #colocando button { font: inherit; font-size: 12px; border: 0; border-radius: 999px; padding: 5px 10px; background: #e9e1bf; color: #2b2a17; cursor: pointer; }
     #celeiroInfo { display: block; opacity: .75; margin-bottom: 8px; }
     #celeiroLista { list-style: none; margin: 0 0 10px; padding: 0; display: grid; gap: 6px; }
     #celeiroLista li { display: grid; grid-template-columns: 28px 1fr auto auto; gap: 8px; align-items: center; background: rgba(255,245,210,.07); border-radius: 9px; padding: 6px 8px; }
@@ -82,6 +100,7 @@
       <button id="bLonge" aria-pressed="false">Ver mais longe</button>
       <button id="bAgricultor">Achar o agricultor</button>
       <button id="bEquipe">Chamar a equipe</button>
+      <button id="bLoja" class="destaque">Loja</button>
       <button id="bCeleiro">Celeiro</button>
       <button id="bOpcoes" aria-expanded="false" aria-controls="opcoes">Opções</button>
     </div>
@@ -101,6 +120,12 @@
     <span class="nivel">Nível <b id="hudNivel">1</b> <span class="barra"><i id="hudXp"></i></span></span>
     <span id="relogio" aria-live="off"></span>
   </div>
+  <section id="lojaDlg" class="caixa dlg" hidden aria-label="Loja">
+    <header><b>Loja</b><button id="bFecharLoja" aria-label="Fechar loja">✕</button></header>
+    <nav class="abas" role="tablist"><button data-aba="sementes" role="tab">Sementes</button><button data-aba="animais" role="tab">Animais</button><button data-aba="decor" role="tab">Decoração</button></nav>
+    <div id="lojaCorpo"></div>
+  </section>
+  <div id="colocando" class="caixa" hidden><span></span><button id="bCancelarColocar">Cancelar</button></div>
   <section id="celeiroDlg" class="caixa dlg" hidden aria-label="Celeiro">
     <header><b>Celeiro</b><button id="bFecharCeleiro" aria-label="Fechar celeiro">✕</button></header>
     <small id="celeiroInfo"></small>
@@ -124,16 +149,18 @@
   <canvas id="mini" class="caixa" aria-label="Mapa inteiro: toque para ir até um lugar"></canvas>
   <div id="medidor" class="caixa"></div>
   <div id="carregando" class="caixa">Plantando o capim…</div>
-  <script src="layout.js?v=35"></script>
-  <script src="grama.js?v=35"></script>
-  <script src="construcoes.js?v=35"></script>
-  <script src="plantas.js?v=35"></script>
-  <script src="currais.js?v=35"></script>
-  <script src="animais.js?v=35"></script>
-  <script src="jogo.js?v=35"></script>
-  <script src="som.js?v=35"></script>
-  <script src="clima.js?v=35"></script>
-  <script src="trabalhadores.js?v=35"></script>
-  <script src="mapa.js?v=35"></script>
+  <script src="layout.js?v=39"></script>
+  <script src="grama.js?v=39"></script>
+  <script src="construcoes.js?v=39"></script>
+  <script src="plantas.js?v=39"></script>
+  <script src="currais.js?v=39"></script>
+  <script src="animais.js?v=39"></script>
+  <script src="jogo.js?v=39"></script>
+  <script src="decor.js?v=39"></script>
+  <script src="caminhao.js?v=39"></script>
+  <script src="som.js?v=39"></script>
+  <script src="clima.js?v=39"></script>
+  <script src="trabalhadores.js?v=39"></script>
+  <script src="mapa.js?v=39"></script>
 </body>
 </html>

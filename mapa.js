@@ -28,6 +28,10 @@
   for (const p of predios) p.e = p.espec(p.nivel);
   // ---------- currais e animais ----------
   const C = Currais.criar(L, Construcoes.util), bichos = Animais.criar(C);
+  bichos.definirQuantos(id => jogo.estado.animais[id] || 0); // quantos bichos o jogador comprou
+  // decorações compradas na loja: { d (catálogo), x, y, cv }
+  const DEC = Decor.criar(Construcoes.util), decoracoes = [];
+  const decorEm = (x, y, folga = 0) => decoracoes.some(o => { const [a, b, c, d] = DEC.pegada(o.d, o.x, o.y); return x > a - folga && x < c + folga && y > b - folga && y < d + folga; });
   /** distância até a construção mais perto (negativa dentro) */
   function noPredio(x, y) {
     let m = 999;
@@ -83,7 +87,7 @@
     return g < 0.58 ? 0 : Math.min(1, (g - 0.58) * 5) * (1 - Math.abs(m - 1) / 18);
   }
 
-  const dpr = Math.min(2, devicePixelRatio || 1); // acima de 2 o capim pesa no celular sem diferença visível
+  const DPR0 = Math.min(2, devicePixelRatio || 1); let dpr = DPR0; // acima de 2 o capim pesa no celular sem diferença visível
   // tom e altura do capim: ondas suaves (como na Selva) misturadas com ruído largo, para não aparecer listra de longe
   const campo = (x, y) => Math.max(0, Math.min(1, 0.5 + 0.17 * Math.sin(x / 97 + Math.sin(y / 61)) + 0.13 * Math.sin(y / 73 + x / 151) + 0.09 * Math.sin((x + y) / 37)
     + 0.6 * (ruido(x / 240, y / 240, 17) - 0.5) + 0.3 * (ruido(x / 85, y / 85, 19) - 0.5)));
@@ -455,7 +459,7 @@
       for (let i = Math.max(0, Math.floor(x0 / GC)); i <= Math.min(GX - 1, Math.floor(x1 / GC)); i++) {
         const x = i * GC + GC / 2, y = j * GC + GC / 2;
         const ponte = naPonte(x, y, -8), seco = rio.margem(x, y) > 10;
-        custo[i + j * GX] = !(ponte || seco) || noPredio(x, y) < 6 || C.bloqueia(x, y) || x < 20 || y < 30 || x > W - 20 || y > H - 10 ? 0
+        custo[i + j * GX] = !(ponte || seco) || noPredio(x, y) < 6 || C.bloqueia(x, y) || decorEm(x, y, 4) || x < 20 || y < 30 || x > W - 20 || y > H - 10 ? 0
           : (ponte || estrada.borda(x, y) < 0 || noPatio(x, y) < 0 || naEntrada(x, y)) ? 0.55 : 1;
       }
   }
@@ -522,6 +526,9 @@
   const casaDaEquipe = () => { const e = predios.find(p => p.id === 'casa').e; return [e.porta[0], e.porta[1] + 20]; };
   const equipe = Trabalhadores.criar({ C, bichos, rota, gradeFora: () => custo, gradeDentro: () => custoDentro, livre: pontoLivre, casa: casaDaEquipe, grama, agora: () => ultimo / 1000,
     colheu: c => colheu(c),
+    semente: () => { const e = jogo.estado; if (e.sementes[e.plantio] > 0) return e.plantio; const outra = Object.keys(e.sementes).find(k => e.sementes[k] > 0); if (!outra) semSemente(); return outra || null; },
+    nomeSemente: k => Jogo.PRODUTOS[k].nome.toLowerCase(),
+    plantar: (c, tipo) => { if (jogo.usarSemente(tipo)) { C.replantar(c, tipo, ultimo / 1000); atualizarHud(); if (!lojaDlg.hidden) montarLoja(); } else semSemente(); },
     imagem: pasta => { const i = new Image(); i.src = `equipe/${pasta}/sheet.png?v=46`; return i; } });
   const agricultor = equipe.agricultor; // o agricultor da equipe: cuida da horta e atende o clique no chão
 
@@ -533,7 +540,7 @@
   function medir() {
     cssW = innerWidth; cssH = innerHeight;
     tela.width = Math.round(cssW * dpr); tela.height = Math.round(cssH * dpr);
-    zMin = Math.max(cssW / 2600, cssH / 1500, 0.6);
+    zMin = Math.max(cssW / W, cssH / H, 0.35); // dá para ver a fazenda inteira
     ajustarZoom(cam.zoom, cssW / 2, cssH / 2);
   }
   function limitar() {
@@ -552,7 +559,7 @@
   addEventListener('resize', medir);
   medir();
   cam.zoom = Math.max(zMin, 1); limitar();
-  ajustarZoom(Math.min(1, cssW / 1500), cssW / 2, cssH / 2);
+  ajustarZoom(Math.min(0.75, cssW / 2000), cssW / 2, cssH / 2);
   centrar(3330, 860); // começa no terreiro: casa, celeiro, galinheiro e curral das vacas
 
   tela.addEventListener('wheel', e => { e.preventDefault(); ajustarZoom(cam.zoom * Math.exp(-e.deltaY * 0.0015), e.clientX, e.clientY); }, { passive: false });
@@ -580,6 +587,9 @@
     dedos.delete(e.pointerId); tela.classList.remove('arrastando');
     if (gesto && gesto.tipo === 'arrasto' && !gesto.moveu && e.type === 'pointerup') {
       const wx = cam.x + e.clientX / cam.zoom, wy = cam.y + e.clientY / cam.zoom, pr = predioEm(wx, wy), bi = bichos.bichoEm(wx, wy), tb = equipe.em(wx, wy);
+      if (colocando) { colocarDecor(wx, wy); return; }
+      const dc = decoracoes.find(o => { const c = DEC.caixa(o.d, o.x, o.y); return wx > c[0] + 12 && wx < c[2] - 12 && wy > c[1] + 8 && wy < c[3]; });
+      if (dc && !tb && !bi) { avisar(dc.d.nome); return; }
       const ob = !tb && !bi ? C.objetoEm(wx, wy) : null;
       if (tb) avisar(equipe.descricao(tb));
       else if (ob) avisar(ob.rotuloAgora ? ob.rotuloAgora(ultimo / 1000) : ob.rotulo);
@@ -601,7 +611,7 @@
   const bLotes = document.getElementById('bLotes'), bVento = document.getElementById('bVento'), bLonge = document.getElementById('bLonge');
   bLotes.onclick = () => { mostrarLotes = !mostrarLotes; bLotes.setAttribute('aria-pressed', mostrarLotes); bLotes.textContent = mostrarLotes ? 'Esconder lotes' : 'Mostrar lotes'; };
   bVento.onclick = () => { grama.vento = !grama.vento; bVento.setAttribute('aria-pressed', grama.vento); };
-  bLonge.onclick = () => { const longe = cam.zoom > zMin + 0.01; ajustarZoom(longe ? zMin : 1, cssW / 2, cssH / 2); bLonge.setAttribute('aria-pressed', longe); };
+  bLonge.onclick = () => { const longe = cam.zoom > zMin + 0.01; ajustarZoom(longe ? zMin : 0.75, cssW / 2, cssH / 2); bLonge.setAttribute('aria-pressed', longe); };
   document.getElementById('bAgricultor').onclick = () => { if (agricultor.visivel) centrar(agricultor.x, agricultor.y - 30); else { const [x, y] = casaDaEquipe(); centrar(x, y - 60); avisar('O agricultor está descansando em casa'); } };
   document.getElementById('bEquipe').onclick = () => { equipe.chamar(); avisar('A equipe está saindo de casa para cuidar dos animais'); };
   let aviso = '', avisoAte = 0;
@@ -611,7 +621,8 @@
   const som = Som.criar();
   const clima = Clima.criar({
     trovejar: (perto, atraso) => som.trovejar(perto, atraso),
-    luzes: () => predios.filter(p => !p.e.vazio).map(p => [p.e.porta[0], p.e.porta[1] - 30, p.id === 'casa' ? 170 : 120]),
+    luzes: () => [...predios.filter(p => !p.e.vazio).map(p => [p.e.porta[0], p.e.porta[1] - 30, p.id === 'casa' ? 170 : 120]),
+      ...decoracoes.filter(o => o.d.luz).map(o => [o.x + o.d.luz[0] + 9, o.y + o.d.luz[1], o.d.luz[2]])],
   });
   addEventListener('pointerdown', () => som.ativar(), true); addEventListener('keydown', () => som.ativar(), true); // o navegador só libera o áudio depois de um toque
   document.addEventListener('click', e => { if (e.target.closest('button, select')) som.menu('clique'); }, true);
@@ -911,8 +922,8 @@
   }
   function vender(k) {
     const g = jogo.vender(k); if (!g) return;
-    som.menu('moedas'); avisar(`Vendido por ${g} moedas`);
-    const pr = predios.find(p => p.id === 'celeiro'); flutuar(pr.e.porta[0], pr.e.porta[1] - 70, `+${g} 🪙`);
+    som.menu('clique'); avisar(`Vendido por ${g} moedas: o caminhão vem buscar`);
+    chamarCaminhao(g);
     montarCeleiro(); atualizarBotoes();
   }
   bVenderTudo.onclick = () => vender(null);
@@ -923,6 +934,165 @@
   setInterval(() => jogo.salvar(), 15000);
   addEventListener('pagehide', () => jogo.salvar());
   atualizarBotoes();
+  // ---------- loja: sementes, animais e decorações ----------
+  const lojaDlg = document.getElementById('lojaDlg'), lojaCorpo = document.getElementById('lojaCorpo'), abas = [...document.querySelectorAll('#lojaDlg [data-aba]')];
+  let aba = 'sementes', avisoSemente = 0;
+  function semSemente() { const t = performance.now(); if (t - avisoSemente > 30000) { avisoSemente = t; avisar('O agricultor está sem sementes: compre na Loja'); } }
+  const el = (tag, props = {}, ...filhos) => { const n = Object.assign(document.createElement(tag), props); n.append(...filhos); return n; };
+  function linha(icone, nome, sub, direita) { return el('li', {}, el('span', { className: 'ic', textContent: icone }), el('span', { className: 'nm', textContent: nome }, el('small', { textContent: sub })), ...direita); }
+  function botao(texto, ok, acao, classe = '') { const b = el('button', { textContent: texto, disabled: !ok, className: classe }); b.onclick = acao; return b; }
+  function montarLoja() {
+    for (const a of abas) a.setAttribute('aria-selected', String(a.dataset.aba === aba));
+    const e = jogo.estado, nj = jogo.nivelJogador(), lista = el('ul', { className: 'lista' });
+    if (aba === 'sementes') {
+      const horta = jogo.nivel('horta') > 0;
+      lojaCorpo.replaceChildren(el('small', { className: 'dica', textContent: horta ? 'Cada pacote planta um canteiro. Escolha o que o agricultor planta na horta.' : 'Construa a horta (painel Construir) para o agricultor plantar.' }), lista);
+      for (const [k, sm] of Object.entries(Jogo.SEMENTES)) {
+        const pr = Jogo.PRODUTOS[k], tem = e.sementes[k] || 0, travada = nj < sm.pede;
+        const escolhida = e.plantio === k;
+        const b1 = botao(`+1 · ${sm.preco} 🪙`, !travada && e.moedas >= sm.preco, () => comprar(() => jogo.comprarSemente(k, 1)));
+        const b5 = botao(`+5 · ${sm.preco * 5} 🪙`, !travada && e.moedas >= sm.preco * 5, () => comprar(() => jogo.comprarSemente(k, 5)));
+        const bp = botao(escolhida ? 'Plantando' : 'Plantar', !travada && !escolhida, () => { e.plantio = k; jogo.salvar(); montarLoja(); avisar(`O agricultor vai plantar ${pr.nome.toLowerCase()}`); }, escolhida ? 'marcado' : 'leve');
+        lista.append(linha(pr.icone, pr.nome, travada ? `Libera no nível ${sm.pede}` : `você tem ${tem} · colheita vale ${2 * jogo.precoVenda(k)} 🪙`, travada ? [] : [b1, b5, bp]));
+      }
+    } else if (aba === 'animais') {
+      lojaCorpo.replaceChildren(el('small', { className: 'dica', textContent: 'Os animais entram pela porteira. Evolua o curral para caber mais.' }), lista);
+      for (const [id, a] of Object.entries(Jogo.ANIMAIS)) {
+        const n = jogo.nivel(id), cap = n ? bichos.QTD[id][n - 1] : 0, tem = Math.min(cap, e.animais[id] || 0);
+        const sub = !n ? `Construa o ${Jogo.NOMES[id].toLowerCase()} primeiro` : `${tem}/${cap} no ${Jogo.NOMES[id].toLowerCase()}`;
+        lista.append(linha(a.icone, a.nome, sub, n ? [botao(tem >= cap ? 'Cheio' : `Comprar · ${a.preco} 🪙`, tem < cap && e.moedas >= a.preco, () => comprar(() => {
+          const m = jogo.comprarAnimal(id, cap); if (m) return m;
+          bichos.ajustar(C.currais.find(c => c.id === id), true); som.animal(a.nome === 'Galinha' ? 'galinha' : { Porco: 'porco', Ovelha: 'ovelha', Vaca: 'vaca' }[a.nome], ...C.pontosPorteira(C.currais.find(c => c.id === id)).dentro);
+          return '';
+        }))] : []));
+      }
+    } else {
+      lojaCorpo.replaceChildren(el('small', { className: 'dica', textContent: 'Compre e clique no gramado para colocar (fora das estradas e dos lotes).' }), lista);
+      for (const d of Object.values(DEC.DECOR)) {
+        const travada = nj < d.pede;
+        lista.append(linha(d.icone, d.nome, travada ? `Libera no nível ${d.pede}` : `${decoracoes.filter(o => o.d === d).length} colocados`, travada ? [] : [botao(`Colocar · ${d.preco} 🪙`, !jogo.podeDecor(d), () => { abrirLoja(false); iniciarColocar(d); })]));
+      }
+    }
+  }
+  function comprar(f) { const m = f(); if (m) avisar(m); else som.menu('moedas'); montarLoja(); atualizarBotoes(); }
+  function abrirLoja(abrir = true) { lojaDlg.hidden = !abrir; if (abrir) montarLoja(); setTimeout(() => som.menu(abrir ? 'abrir' : 'fechar'), 0); }
+  for (const a of abas) a.onclick = () => { aba = a.dataset.aba; montarLoja(); };
+  document.getElementById('bLoja').onclick = () => abrirLoja(lojaDlg.hidden);
+  document.getElementById('bFecharLoja').onclick = () => abrirLoja(false);
+  addEventListener('keydown', e => { if (e.key === 'Escape' && !lojaDlg.hidden) abrirLoja(false); });
+
+  // ---------- decorações no mapa ----------
+  let colocando = null, fantasma = null;
+  const faixaColocar = document.getElementById('colocando');
+  function iniciarColocar(d) { colocando = d; fantasma = null; faixaColocar.hidden = false; faixaColocar.firstChild.textContent = `Clique no gramado para colocar: ${d.nome} · ${d.preco} 🪙 `; }
+  function pararColocar() { colocando = null; fantasma = null; faixaColocar.hidden = true; }
+  document.getElementById('bCancelarColocar').onclick = pararColocar;
+  addEventListener('keydown', e => { if (e.key === 'Escape' && colocando) pararColocar(); });
+  /** cabe ali? só no gramado: fora de estrada, rio, lotes, construções e outras decorações */
+  function lugarLivre(d, x, y) {
+    const [a, b, c, e] = DEC.pegada(d, x, y);
+    if (a < 40 || b < 60 || c > W - 40 || e > H - 30) return false;
+    for (const l of lotes) if (c > l.x - 16 && a < l.x + l.w + 16 && e > l.y - 16 && b < l.y + l.h + 16) return false;
+    for (let yy = b; yy <= e; yy += 8) for (let xx = a; xx <= c; xx += 8) {
+      if (custo[Math.floor(xx / GC) + Math.floor(yy / GC) * GX] !== 1 || estrada.borda(xx, yy) < 14 || decorEm(xx, yy, 14)) return false;
+    }
+    return true;
+  }
+  function montarDecor(o) { o.cv = DEC.assar(o.d, o.x, o.y, qPredio()); o.cq = qPredio(); }
+  function porDecor(k, x, y) {
+    const d = DEC.DECOR[k]; if (!d) return;
+    const o = { d, x, y }; montarDecor(o); decoracoes.push(o);
+    grama.aparar(x, y - d.d * 0.4, d.w * 0.42, 0.6); // só baixa um pouco o capim no pé (sem buraco em volta)
+    recalcularCusto(x - d.w, y - d.d - 20, x + d.w, y + 20); montarCustoDentro();
+  }
+  function colocarDecor(x, y) {
+    const d = colocando;
+    if (!lugarLivre(d, x, y)) { avisar('Aí não dá: escolha um pedaço de gramado livre'); return; }
+    const m = jogo.comprarDecor(d, x, y); if (m) { avisar(m); pararColocar(); return; }
+    porDecor(d.id, Math.round(x), Math.round(y)); som.menu('obra'); avisar(`${d.nome} colocado`);
+    for (let i = 0; i < 18; i++) poeira.push({ x: x + (Math.random() - 0.5) * d.w, y: y - Math.random() * 10, vx: (Math.random() - 0.5) * 30, vy: -10 - Math.random() * 16, vida: -Math.random() * 0.3, dura: 1 + Math.random() * 0.6, r: 6 + Math.random() * 8 });
+    pararColocar(); atualizarBotoes();
+  }
+  tela.addEventListener('pointermove', e => { if (colocando && e.pointerType === 'mouse') fantasma = [cam.x + e.clientX / cam.zoom, cam.y + e.clientY / cam.zoom]; });
+  function extrasDecor() {
+    const out = [], qp = qPredio();
+    for (const o of decoracoes) {
+      const c = DEC.caixa(o.d, o.x, o.y);
+      if (c[2] < cam.x || c[0] > cam.x + cam.largura || c[3] < cam.y || c[1] > cam.y + cam.altura) continue;
+      if (o.cq !== qp && performance.now() - zoomMudou > 300) montarDecor(o);
+      out.push({ y: o.y, desenhar: () => ctx.drawImage(o.cv, c[0], c[1], c[2] - c[0], c[3] - c[1]) });
+    }
+    if (colocando && fantasma) {
+      const [x, y] = fantasma, d = colocando, ok = lugarLivre(d, x, y);
+      if (!fantasma.cv || fantasma.d !== d) { fantasma.cv = DEC.assar(d, 0, 0, 1.5); fantasma.d = d; }
+      const c = DEC.caixa(d, x, y), cv = fantasma.cv;
+      out.push({ y: 1e9, desenhar: () => {
+        const [a, b, cc, dd] = DEC.pegada(d, x, y);
+        ctx.fillStyle = ok ? 'rgba(160,230,110,.35)' : 'rgba(230,80,60,.4)'; ctx.beginPath(); ctx.ellipse((a + cc) / 2, (b + dd) / 2, (cc - a) / 2 + 8, (dd - b) / 2 + 6, 0, 0, 7); ctx.fill();
+        ctx.globalAlpha = 0.7; ctx.drawImage(cv, c[0], c[1], c[2] - c[0], c[3] - c[1]); ctx.globalAlpha = 1;
+      } });
+    }
+    return out;
+  }
+  for (const o of jogo.estado.decor) porDecor(o.k, o.x, o.y);
+
+  // ---------- caminhão: vem buscar a venda no celeiro ----------
+  const CAM = Caminhao.criar(Construcoes.util), imgsCam = {};
+  let caminhao = null, gradeEstrada = null;
+  const imgCam = (vista, carga) => { const k = vista + carga + qPredio(); return imgsCam[k] || (imgsCam[k] = CAM.assar(vista, carga, qPredio())); };
+  function rotaCaminhao() {
+    if (!gradeEstrada) { gradeEstrada = new Float32Array(custo.length); for (let i = 0; i < custo.length; i++) gradeEstrada[i] = custo[i] > 0 && custo[i] < 1 ? 1 : 0; }
+    const cel = predios.find(p => p.id === 'celeiro').e, [fx, fy] = pontoLivre(gradeEstrada, cel.porta[0], cel.porta[1] + 60), [ix, iy] = pontoLivre(gradeEstrada, 40, P.y + 50);
+    const pts = rota(ix, iy, fx, fy, gradeEstrada); if (!pts || pts.length < 2) return null;
+    let q = [[0, iy], ...pts]; // entra pela beirada do mapa
+    for (let k = 0; k < 3; k++) { const n = [q[0]]; for (let i = 0; i < q.length - 1; i++) { const [a, b] = [q[i], q[i + 1]]; n.push([a[0] * 0.75 + b[0] * 0.25, a[1] * 0.75 + b[1] * 0.25], [a[0] * 0.25 + b[0] * 0.75, a[1] * 0.25 + b[1] * 0.75]); } n.push(q[q.length - 1]); q = n; } // curvas suaves
+    const dist = [0]; for (let i = 1; i < q.length; i++) dist.push(dist[i - 1] + Math.hypot(q[i][0] - q[i - 1][0], q[i][1] - q[i - 1][1]));
+    return { pts: q, dist, total: dist[dist.length - 1] };
+  }
+  function pontoNa(r, s) {
+    let i = 1; while (i < r.dist.length - 1 && r.dist[i] < s) i++;
+    const a = r.pts[i - 1], b = r.pts[i], t = Math.max(0, Math.min(1, (s - r.dist[i - 1]) / ((r.dist[i] - r.dist[i - 1]) || 1)));
+    return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, b[0] - a[0], b[1] - a[1]];
+  }
+  const foraDaTela = (x, y) => x < cam.x - 220 || x > cam.x + cam.largura + 220 || y < cam.y - 220 || y > cam.y + cam.altura + 220;
+  function chamarCaminhao(valor) {
+    if (caminhao && caminhao.fase !== 'voltando') { caminhao.valor += valor; return; }
+    const r = rotaCaminhao(); if (!r) { flutuarCeleiro(valor); return; }
+    // começa logo fora da tela (pela estrada), para chegar rápido
+    let s = r.total - 40; while (s > 0) { const [x, y] = pontoNa(r, s); if (foraDaTela(x, y)) break; s -= 40; }
+    if (s < 0) s = 0;
+    caminhao = { r, s, fase: 'indo', valor, t: 0, vista: 'lado', vira: 1, vel: 0, motor: som.motor() };
+    avisar('O caminhão está vindo buscar a carga');
+  }
+  function flutuarCeleiro(v) { const pr = predios.find(p => p.id === 'celeiro'); flutuar(pr.e.porta[0], pr.e.porta[1] - 70, `+${v} 🪙`); }
+  function atualizarCaminhao(dt) {
+    const k = caminhao; if (!k) return;
+    if (k.fase === 'carregando') {
+      k.t += dt; k.vel = 0;
+      if (k.t > 3.2) { k.fase = 'voltando'; k.carga = 1; flutuarCeleiro(k.valor); som.menu('moedas'); }
+    } else {
+      const ida = k.fase === 'indo', falta = ida ? k.r.total - k.s : k.s;
+      const alvo = ida ? Math.min(330, 40 + falta * 1.4) : Math.min(330, 60 + (k.r.total - k.s) * 1.2 + 30);
+      k.vel += (alvo - k.vel) * Math.min(1, dt * 2.2);
+      k.s += (ida ? 1 : -1) * k.vel * dt;
+      if (ida && k.s >= k.r.total - 2) { k.s = k.r.total; k.fase = 'carregando'; k.t = 0; som.trabalho('buzina', ...pontoNa(k.r, k.s)); }
+      if (!ida && (k.s <= 0 || (foraDaTela(...pontoNa(k.r, k.s)) && k.r.total - k.s > 600))) { if (k.motor) k.motor.parar(); caminhao = null; return; }
+    }
+    const [x, y, dx0, dy0] = pontoNa(k.r, k.s), dx = k.fase === 'voltando' ? -dx0 : dx0, dy = k.fase === 'voltando' ? -dy0 : dy0;
+    if (k.fase !== 'carregando' && Math.hypot(dx, dy) > 0.1) { // vista pela direção (com folga, para não ficar trocando)
+      const lado = Math.abs(dx) > Math.abs(dy) * (k.vista === 'lado' ? 0.6 : 1.4);
+      k.vista = lado ? 'lado' : dy > 0 ? 'frente' : 'tras'; if (lado) k.vira = dx >= 0 ? 1 : -1;
+    }
+    k.x = x; k.y = y;
+    if (k.motor) k.motor.mover(x, y, k.vel);
+    if (quadros % 3 === 0) grama.pisar(x, y, dx, dy, ultimo / 1000, 40, 4);
+  }
+  function extrasCaminhao() {
+    const k = caminhao; if (!k || k.x == null) return [];
+    const im = imgCam(k.vista, k.carga ? 1 : 0), [a, b, c, d] = im.caixa, sac = k.fase === 'carregando' ? 0 : Math.sin(ultimo / 70) * 0.5;
+    return [{ y: k.y, desenhar: () => { ctx.save(); ctx.translate(k.x, k.y + sac); if (k.vista === 'lado' && k.vira < 0) ctx.scale(-1, 1); ctx.drawImage(im.cv, a, b, c - a, d - b); ctx.restore(); } }];
+  }
+
   if (jogo.origem === 'importado') setTimeout(() => avisar(`Trouxemos do jogo atual: ${jogo.estado.moedas} moedas e o seu nível`), 1500);
   /** construção sob o ponto (tela tocada), pelo desenho e não só pela planta */
   function predioEm(wx, wy) {
@@ -936,9 +1106,21 @@
     const S = cam.escala;
     return S <= 1.05 ? 1 : S <= 1.3 ? 1.25 : S <= 1.6 ? 1.5 : S <= 2.1 ? 2 : 2.5;
   }
+  // resolução automática: se o PC não aguenta 30 quadros/s, a tela é desenhada com menos pontos (e volta quando sobra)
+  let mediaQ = 33, ultimoReal = 0, lentoDesde = 0, rapidoDesde = 0, escalaRes = 1;
+  function ajustarResolucao(t) {
+    if (!pronto) return;
+    const muda = d => { escalaRes = Math.max(0.45, Math.min(1, escalaRes + d)); dpr = Math.max(0.6, DPR0 * escalaRes); medir(); mediaQ = 33; lentoDesde = rapidoDesde = 0; };
+    if (mediaQ > 44) { rapidoDesde = 0; if (!lentoDesde) lentoDesde = t; else if (t - lentoDesde > 1500 && escalaRes > 0.45) muda(-0.15); }
+    else if (mediaQ < 35 && escalaRes < 1) { lentoDesde = 0; if (!rapidoDesde) rapidoDesde = t; else if (t - rapidoDesde > 6000) muda(0.15); }
+    else lentoDesde = rapidoDesde = 0;
+  }
   function quadro(t) {
     requestAnimationFrame(quadro);
     if (t - ultimo < 1000 / 30 - 2) return;
+    if (ultimoReal && document.visibilityState === 'visible') mediaQ = mediaQ * 0.9 + Math.min(120, t - ultimoReal) * 0.1; // um engasgo sozinho não derruba a resolução
+    ultimoReal = t;
+    ajustarResolucao(t);
     desenharQuadro(t);
   }
   function desenharQuadro(t) {
@@ -951,11 +1133,12 @@
       for (const p of predios) if (p.cq !== qp && !p.anim) assar(p, qp);
       if (qCurrais !== qp) { C.assar(qp); qCurrais = qp; }
     }
+    grama.longe = cam.zoom < 0.72; // de longe o capim vira placas prontas (bem mais leve)
     grama.orcamentoMs = !pronto ? 120 : predios.some(p => p.anim) ? 26 : 9; // na obra, o gramado em volta se refaz debaixo da poeira
     C.atualizar(dt);
     equipe.atualizar(dt, agora);
     bichos.atualizar(dt, agora, grama, equipe.gente());
-    clima.atualizar(dt); ouvir(dt);
+    clima.atualizar(dt); ouvir(dt); atualizarCaminhao(dt);
 
     const S = cam.escala;
     ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = '#36401e'; ctx.fillRect(0, 0, tela.width, tela.height);
@@ -974,7 +1157,7 @@
       }
     if (quadros % 90 === 0) for (const [k, lad] of ladrilhos) if (quadros - lad.visto > 300) ladrilhos.delete(k);
     desenharAgua(cam, agora, dt);
-    const faltaCapim = grama.quadro(ctx, cam, agora, [...extraPonte, ...extrasPredios, ...C.extras(ctx, cam, agora), ...bichos.extras(ctx, cam, agora), ...equipe.extras(ctx, cam, agora)]);
+    const faltaCapim = grama.quadro(ctx, cam, agora, [...extraPonte, ...extrasPredios, ...C.extras(ctx, cam, agora), ...bichos.extras(ctx, cam, agora), ...equipe.extras(ctx, cam, agora), ...extrasDecor(), ...extrasCaminhao()]);
     ctx.setTransform(S, 0, 0, S, -cam.x * S, -cam.y * S);
     sombras();
     particulas(dt, agora);
@@ -995,14 +1178,14 @@
     if (quadros % 15 === 0) {
       const e = grama.estat;
       const ce = clima.estado; relogio.textContent = `${clima.noite > 0.5 ? '🌙' : ce.hora > 17 || ce.hora < 7.2 ? '🌅' : '☀️'} ${clima.relogio()}${clima.chuva > 0.15 ? ' · chovendo' : ''}`;
-      medidor.textContent = `${gasto.toFixed(1)} ms/quadro · zoom ${cam.zoom.toFixed(2)} · capim ${e.desenhados}/${e.comDados} pedaços · chão ${ladrilhos.size}`;
+      medidor.textContent = `${Math.round(1000 / mediaQ)} quadros/s${escalaRes < 1 ? ` (resolução ${Math.round(escalaRes * 100)}%)` : ''} · ${gasto.toFixed(1)} ms/quadro · zoom ${cam.zoom.toFixed(2)} · capim ${e.desenhados}/${e.comDados} pedaços · chão ${ladrilhos.size}`;
     }
   }
   requestAnimationFrame(quadro);
 
   // para conferir no console / testes
   window.prototipoMapa = {
-    cam, grama, agricultor, rota, centrar, ajustarZoom, ladrilhos, equipe, bichos, currais: C, som, clima, jogo, get pronto() { return pronto; }, get gasto() { return gasto; },
+    cam, grama, agricultor, rota, centrar, ajustarZoom, ladrilhos, equipe, bichos, currais: C, som, clima, jogo, get caminhao() { return caminhao; }, chamarCaminhao, lugarLivre, decoracoes, get pronto() { return pronto; }, get gasto() { return gasto; },
     /** desenha n quadros seguidos e espera a placa de vídeo terminar (getImageData): ms por quadro de verdade */
     medir(n = 20) { const i = performance.now(); for (let k = 0; k < n; k++) { desenharQuadro(ultimo + 33.4); ctx.getImageData(0, 0, 1, 1); } return (performance.now() - i) / n; },
   };

@@ -123,6 +123,7 @@
       ordenha(saida, t, dur) { for (let k = 0; k < dur / 0.42; k++) rajada(t + k * 0.42, 0.09, saida, { f: rnd(2800, 3600), q: 2, pico: 0.3 }); },
       tosquia(saida, t, dur) { for (let k = 0; k < dur / 0.38; k++) { rajada(t + k * 0.38, 0.02, saida, { tipo: 'highpass', f: 5000, pico: 0.4 }); rajada(t + k * 0.38 + 0.05, 0.02, saida, { tipo: 'highpass', f: 6000, pico: 0.3 }); } },
       ovos(saida, t) { ANIMAL.galinha(saida, t + 0.4); },
+      buzina(saida, t) { for (const k of [0, 0.32]) { const g = ac.createGain(); envelope(g, t + k, 0.01, 0.18, 0.06, 0.4); const b = filtro('bandpass', 700, 2); oscila('sawtooth', t + k, [[0, 392]], b, 0.3); oscila('sawtooth', t + k, [[0, 494]], b, 0.3); b.connect(g); g.connect(saida); } },
       passo(saida, t) { rajada(t, 0.07, saida, { tipo: 'lowpass', f: rnd(500, 800), pico: 0.13, ataque: 0.004 }); rajada(t + 0.01, 0.05, saida, { f: rnd(2500, 4000), q: 1.5, pico: 0.04 }); },
     };
     function trabalho(tipo, x, y, extra) { const s = noLugar('trabalho', x, y, 0.9); if (s) TRABALHO[tipo](s, ac.currentTime + 0.02, extra); }
@@ -169,9 +170,28 @@
       if (noite > 0.3 && amb.proxGrilo <= 0) { amb.proxGrilo = rnd(0.25, 0.6); for (let k = 0; k < 2; k++) { const s = noLugar('ambiente', cam.x + Math.random() * cam.largura, cam.y + Math.random() * cam.altura); if (s) { s.gain.value *= noite * (1 - chuva * 0.7) * 0.7; grilo(t + Math.random() * 0.2, s, rnd(4300, 5200)); } } }
       if (chuva > 0.05 && amb.proxGota <= 0) { amb.proxGota = 0.03 / chuva; const s = noLugar('ambiente', null, null); if (s) rajada(t, 0.02, s, { f: rnd(2500, 6000), q: 3, pico: 0.06 * chuva }); }
     }
+    /** motor de um veículo: som contínuo que acompanha a posição (mover) até parar */
+    function motor() {
+      if (!ac || ac.state !== 'running') return null;
+      const g = ac.createGain(), p = ac.createStereoPanner(), lp = filtro('lowpass', 420); g.gain.value = 0;
+      const o = ac.createOscillator(); o.type = 'sawtooth'; o.frequency.value = 48;
+      const o2 = ac.createOscillator(); o2.type = 'square'; o2.frequency.value = 24; const g2 = ac.createGain(); g2.gain.value = 0.35;
+      const s = fonteRuido(true), bn = filtro('bandpass', 180, 0.8), gn = ac.createGain(); gn.gain.value = 0.6;
+      o.connect(lp); o2.connect(g2); g2.connect(lp); s.connect(bn); bn.connect(gn); gn.connect(lp); lp.connect(g); g.connect(p); p.connect(grupo.trabalho);
+      o.start(); o2.start(); s.start(0, Math.random());
+      return {
+        mover(x, y, vel) {
+          const cx = ouvinte.x + ouvinte.largura / 2, cy = ouvinte.y + ouvinte.altura / 2, raio = Math.max(ouvinte.largura, ouvinte.altura) * 0.55;
+          const v = Math.max(0, 1 - Math.hypot(x - cx, (y - cy) * 1.2) / (raio * 1.6)) ** 1.5, t = ac.currentTime;
+          g.gain.setTargetAtTime(v * 0.32, t, 0.15); p.pan.setTargetAtTime(Math.max(-0.85, Math.min(0.85, (x - cx) / (ouvinte.largura / 2))), t, 0.15);
+          o.frequency.setTargetAtTime(42 + vel * 0.12, t, 0.3); o2.frequency.setTargetAtTime(21 + vel * 0.06, t, 0.3);
+        },
+        parar() { const t = ac.currentTime; g.gain.setTargetAtTime(0, t, 0.2); for (const n of [o, o2, s]) n.stop(t + 1); },
+      };
+    }
     /** trovão (quem decide é o clima, junto com o clarão) */
     function trovejar(perto, atraso = 0) { const s = noLugar('ambiente', null, null); if (s) trovao(ac.currentTime + atraso, s, perto); }
-    return { ativar, definir, vol, animal, trabalho, menu, quadro, trovejar, get ativo() { return !!ac && ac.state === 'running'; } };
+    return { ativar, definir, vol, animal, trabalho, menu, quadro, trovejar, motor, get ativo() { return !!ac && ac.state === 'running'; } };
   }
   raiz.Som = { criar, PADRAO };
 })(typeof self !== 'undefined' ? self : globalThis);

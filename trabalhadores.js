@@ -33,9 +33,10 @@
       let regas = 0;
       for (const c of canteiros) {
         const e = c.estagio(agora);
-        if (e === 3) lista.push({ ponto: frente(c), dur: 4, texto: `Colhendo ${nome(c)}`, depois: () => { c.plantado = null; if (o.colheu) o.colheu(c); } },
-          { ponto: frente(c), dur: 3.5, texto: `Plantando ${nome(c)}`, depois: () => { c.plantado = o.agora(); } });
-        else if (e === 0) lista.push({ ponto: frente(c), dur: 3.5, texto: `Plantando ${nome(c)}`, depois: () => { c.plantado = o.agora(); } });
+        // plantar: a semente escolhida na loja (o.plantar troca a cultura do canteiro e gasta 1 pacote; null = sem semente)
+        const plantar = () => { const tipo = o.semente ? o.semente() : c.cultura; return tipo && { ponto: frente(c), dur: 3.5, texto: `Plantando ${o.nomeSemente ? o.nomeSemente(tipo) : nome(c)}`, depois: () => { if (o.plantar) o.plantar(c, tipo); else c.plantado = o.agora(); } }; };
+        if (e === 3) { lista.push({ ponto: frente(c), dur: 4, texto: `Colhendo ${nome(c)}`, depois: () => { c.plantado = null; if (o.colheu) o.colheu(c); } }); const pl = plantar(); if (pl) lista.push(pl); }
+        else if (e === 0) { const pl = plantar(); if (pl) lista.push(pl); }
         else if (regas < 2 && Math.random() < 0.5) { regas++; lista.push({ ponto: frente(c), dur: 3, texto: `Regando ${nome(c)}`, depois: () => { c.plantado -= c.dur * 0.08; } }); } // a rega adianta um pouco
       }
       if (!lista.length && canteiros.length) { const c = canteiros[Math.floor(Math.random() * canteiros.length)]; lista.push({ ponto: frente(c), dur: 3, texto: `Regando ${nome(c)}` }); }

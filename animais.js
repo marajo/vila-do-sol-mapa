@@ -566,9 +566,10 @@
       }
     }
     /** acerta quantos bichos o curral tem no nível dele; os novos entram pela porteira, quem ficou fora do curral menor volta para dentro */
+    let quantos = null; // id do curral → quantos bichos o jogador comprou
     function ajustar(cur, entrar = false) {
       if (!QTD[cur.id]) return;
-      const n = cur.nivel ? QTD[cur.id][cur.nivel - 1] : 0; // nível 0: curral ainda não existe
+      const cap = cur.nivel ? QTD[cur.id][cur.nivel - 1] : 0, n = quantos ? Math.min(cap, quantos(cur.id)) : cap; // nível 0: curral ainda não existe
       const pp = C.pontosPorteira(cur), lista = bichos.filter(b => b.cur === cur);
       const dx = pp.dentro[0] - pp.meio[0], dy = pp.dentro[1] - pp.meio[1], dl = Math.hypot(dx, dy) || 1;
       let fila = 0;
@@ -587,7 +588,7 @@
       });
     }
     for (const cur of C.currais) ajustar(cur);
-    return { bichos, QTD, ajustar, atualizar, extras, bichoEm, chamar, reservar, chamarPara, rotulo: b => `${b.nome} · ${b.var === 'galo' ? 'galo' : ROTULO[b.tipo]}` };
+    return { definirQuantos: f => { quantos = f; }, bichos, QTD, ajustar, atualizar, extras, bichoEm, chamar, reservar, chamarPara, rotulo: b => `${b.nome} · ${b.var === 'galo' ? 'galo' : ROTULO[b.tipo]}` };
   }
 
   raiz.Animais = { criar, ESP, QTD };

@@ -488,6 +488,14 @@
       }
       return k;
     }
+    /** o canteiro passa a ter outra cultura, já plantada agora (troca o objeto no mesmo lugar) */
+    function replantar(o, tipo, agora) {
+      const cur = currais.find(c => c.objetos.includes(o)); if (!cur) return o;
+      const novo = P.canteiro(o.pegada[0], o.pegada[2], o.base, tipo, agora, VAZIO);
+      novo.plantado = agora; novo.cvs = {};
+      cur.objetos[cur.objetos.indexOf(o)] = novo;
+      return novo;
+    }
     const bloqueia = (x, y) => currais.some(cur => cur.nivel > 0 && dentro(cur, x, y, 14));
 
     // ---------- desenho: equipamentos assados, cercas vetoriais ----------
@@ -582,7 +590,7 @@
       return [antes, { ...cur.l }];
     }
     const nivelPomar = (n, agora) => nivel('pomar', n, agora);
-    return { currais, CERCAS, LOTES, nivel, nivelPomar, objetoEm, capim, aparado, bloqueia, pintarChao, assar, extras, mini, dentro, perto, portao, atualizar, pontosPorteira, andavelDentro };
+    return { replantar, currais, CERCAS, LOTES, nivel, nivelPomar, objetoEm, capim, aparado, bloqueia, pintarChao, assar, extras, mini, dentro, perto, portao, atualizar, pontosPorteira, andavelDentro };
   }
 
   raiz.Currais = { criar };
