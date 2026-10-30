@@ -125,50 +125,72 @@
     }
     const M = k => b.manchas[k] || null;
     const corpo = [], soltas = [];
-    // tronco: um barril comprido, peito e anca (a linha das costas fica reta, como de vaca de verdade)
-    const barril = peca(b, [-3, 0, 42 - dz], [33, 16.5, 15.5], 0, pele, { manchas: M('barril') });
-    corpo.push(barril, peca(b, [20, 0, 42 - dz], [15, 14.5, 16], -0.12, pele, { manchas: M('peito') }), peca(b, [-26, 0, 44 - dz], [13, 15.5, 14], 0.1, pele, { manchas: M('anca') }));
-    // pescoço (abaixa para pastar) e cabeça
+    // tronco de vaca: caixa comprida (barril + barriga caída), linha das costas reta (cernelha e lombo),
+    // anca quadrada com os ossos do quadril marcados
+    const barril = peca(b, [-3, 0, 41 - dz], [33, 18.5, 14.5], 0, pele, { manchas: M('barril') });
+    corpo.push(barril,
+      peca(b, [-5, 0, 33 - dz], [25, 18, 9.5], 0, pele),                                  // barriga
+      peca(b, [-3, 0, 52 - dz], [35, 12.5, 5.5], 0, pele),                                    // lombo reto
+      peca(b, [19, 0, 41 - dz], [15, 16, 16.5], -0.12, pele, { manchas: M('peito') }),      // peito
+      peca(b, [16, 0, 53 - dz], [11, 9.5, 6], 0, pele),                                     // cernelha
+      peca(b, [-26, 0, 44 - dz], [14, 17.5, 14], 0.08, pele, { manchas: M('anca') }));        // anca
+    for (const lado of [-1, 1]) corpo.push(peca(b, [-24, lado * 13, 52 - dz], [6.5, 5, 5], 0, pele)); // ossos do quadril
+    // pescoço (abaixa para pastar) com barbela pendurada embaixo
     const np = -0.32 + b.cab * 1.2 + Math.sin(agora * 0.7 + b.sem) * 0.04 * (1 - b.cab), nb = [26, 0, 46 - dz];
-    corpo.push(peca(b, soma(nb, rotY(np, [11, 0, 0])), [14, 8.5, 11], np, pele, { manchas: M('pescoco') }));
-    if (b.deit < 0.5 && b.var !== 'caramelo') soltas.push(peca(b, [-12, 0, 26 - dz], [8, 7, 5.5], 0, '#eaa5a0', { forca: 0.6 }));
-    // pernas: coxa entra no corpo; canela e casco à parte (passo em quatro tempos; deitada, dobradas)
-    for (const [hx, hy, off, frente] of [[-25, 8.5, 0, false], [19, 8.5, 0.25, true], [-25, -8.5, 0.5, false], [19, -8.5, 0.75, true]]) {
+    corpo.push(peca(b, soma(nb, rotY(np, [11, 0, 0])), [14.5, 8.5, 11.5], np, pele, { manchas: M('pescoco') }));
+    corpo.push(peca(b, soma(nb, rotY(np, [9, 0, -11])), [11, 4, 7.5], np + 0.25, pele));
+    if (b.deit < 0.5 && b.var !== 'caramelo') { // úbere com quatro tetas
+      soltas.push(peca(b, [-13, 0, 25 - dz], [8.5, 7.5, 5.5], 0, '#eaa5a0', { forca: 0.6, contorno: true }));
+      for (const [tx, ty] of [[-9, 3], [-9, -3], [-16, 3], [-16, -3]]) soltas.push(peca(b, [tx, ty, 19.5 - dz], [1.2, 1.2, 2.4], 0, '#e08f8a', { forca: 0.3 }));
+    }
+    // pernas grossas: coxa entra no corpo; jarrete/joelho, canela e casco à parte
+    for (const [hx, hy, off, frente] of [[-25, 10, 0, false], [19, 9.5, 0.25, true], [-25, -10, 0.5, false], [19, -9.5, 0.75, true]]) {
       const s = b.fase + off * TAU;
       let a = Math.sin(s) * 0.45 * b.andar, k = Math.max(0, -Math.cos(s)) * 0.7 * b.andar;
       a = a * (1 - b.deit) + b.deit * (frente ? -1.35 : 1.25); k = k * (1 - b.deit) + b.deit * (frente ? 2.2 : -2.2);
-      const enc = 1 - b.deit * 0.35, quadril = [hx, hy, 36 - dz], joelho = soma(quadril, rotY(a, [0, 0, -19 * enc]));
-      corpo.push(peca(b, soma(quadril, rotY(a, [0, 0, -8 * enc])), [6.5, 5.2, 12 * enc], a, pele, { manchas: hx < 0 ? M('coxa') : null }));
-      soltas.push(peca(b, soma(joelho, rotY(a + k, [0, 0, -7.5 * enc])), [3.5, 3.4, 8.5 * enc], a + k, v.canela, { contorno: true, forca: 0.8 }));
-      soltas.push(peca(b, soma(joelho, rotY(a + k, [0, 0, -15 * enc])), [3.9, 3.9, 2.5], a + k, v.casco, { forca: 0.4 }));
+      if (!frente) a += 0.12 * (1 - b.deit); // a perna de trás desce inclinada até o jarrete
+      const enc = 1 - b.deit * 0.35, quadril = [hx, hy, 37 - dz], joelho = soma(quadril, rotY(a, [0, 0, -20 * enc]));
+      corpo.push(peca(b, soma(quadril, rotY(a, [0, 0, -8 * enc])), frente ? [7, 6, 13 * enc] : [8.5, 6.5, 13.5 * enc], a, pele, { manchas: hx < 0 ? M('coxa') : null }));
+      const ac = a + k - (frente ? 0 : 0.24 * (1 - b.deit)); // canela de trás volta a ficar em pé
+      soltas.push(peca(b, joelho, [4.4, 4.2, 4.2], a, v.canela, { forca: 0.7 }));
+      soltas.push(peca(b, soma(joelho, rotY(ac, [0, 0, -7 * enc])), [3.9, 3.7, 8 * enc], ac, v.canela, { contorno: true, forca: 0.8 }));
+      soltas.push(peca(b, soma(joelho, rotY(ac, [0, 0, -14.5 * enc])), [4.2, 4.2, 2.6], ac, v.casco, { forca: 0.4 }));
     }
-    const hb = soma(nb, rotY(np, [23, 0, 0])), hp = np + 0.62, mast = b.cab > 0.5 || b.deit > 0.6 ? Math.sin(agora * 7 + b.sem) * 0.8 : 0;
+    // cabeça comprida: testa, cara afinando, focinho largo e úmido, orelhas na horizontal, chifres curtos
+    const hb = soma(nb, rotY(np, [23, 0, 0])), hp = np + 0.66, mast = b.cab > 0.5 || b.deit > 0.6 ? Math.sin(agora * 7 + b.sem) * 0.8 : 0;
     const cabeca = (c, rr, cor, extra) => soltas.push(peca(b, soma(hb, rotY(hp, c)), rr, hp, cor, extra));
-    cabeca([5, 0, 0.5], [12.5, 7.2, 8.4], b.var === 'malhada' && b.sem % 2 ? v.mancha : pele, { manchas: M('cabeca'), contorno: true });
-    cabeca([16.5, 0, -1.5 + mast * 0.3], [5.6, 6.4, 5.4], v.focinho, { forca: 0.7, contorno: true });
+    const corCara = b.var === 'malhada' && b.sem % 2 ? v.mancha : pele;
+    cabeca([3, 0, 1.5], [9, 8, 8.5], corCara, { manchas: M('cabeca'), contorno: true });   // testa
+    cabeca([12, 0, -0.5], [10, 6.4, 6.6], corCara, { contorno: true });                     // cara
+    cabeca([20, 0, -2 + mast * 0.3], [5, 6.8, 5.2], v.focinho, { forca: 0.7, contorno: true });
+    cabeca([-1, 0, 8], [3.5, 4, 2.6], tom(corCara, 0.92), { forca: 0.6 });                  // topete
     for (const lado of [-1, 1]) {
-      cabeca([-2, lado * 9.5, 4], [3.2, 6.2, 1.6], tom(pele, 0.92), { contorno: true });
-      cabeca([-0.5, lado * 4.6, 8.6], [1.6, 1.6, 4.6], v.chifre, { forca: 0.6 });
-      cabeca([4.5, lado * 6.8, 2.8], [1.8, 1.3, 1.8], '#16100e', { forca: 0 });
-      cabeca([21, lado * 2.3, -0.8], [1, 1, 1.2], '#4a2a24', { forca: 0 });
+      cabeca([-2, lado * 10.5, 3.5], [3.4, 6.6, 1.6], tom(pele, 0.9), { contorno: true });
+      cabeca([-1.6, lado * 11, 3.9], [2, 4.5, 0.6], '#e7a7a0', { forca: 0.3 });             // dentro da orelha
+      cabeca([-1, lado * 5.4, 8.5], [1.7, 1.7, 4.8], v.chifre, { forca: 0.6 });
+      cabeca([5.5, lado * 7.6, 2.8], [2, 1.4, 2], '#16100e', { forca: 0, brilho: true });
+      cabeca([24.5, lado * 2.6, -1.2], [1.1, 1, 1.3], '#4a2a24', { forca: 0 });
     }
-    // rabo balançando (fio com tufo)
+    // rabo comprido até o jarrete, com tufo, balançando
     const sw = Math.sin(agora * 2.1 + b.sem) * 5 + Math.sin(agora * 5.3 + b.sem) * 1.5;
     const P = c => { const w = rotZ(b.rumo, c), [tx, ty] = tela(w); return [b.x + tx, b.y + ty, dot(w, VISTA)]; };
-    const raiz = P([-38, 0, 48 - dz]), meio = P([-43, sw * 0.4, 33 - dz]), ponta = P([-42, sw, 17 - dz * 0.4]);
-    soltas.push({ prof: raiz[2] - 4, rabo: [raiz, meio, ponta] });
+    const raiz = P([-39, 0, 51 - dz]), meio = P([-44, sw * 0.4, 32 - dz]), ponta = P([-42, sw, 12 - dz * 0.3]);
+    soltas.push({ prof: raiz[2] - 5, rabo: [raiz, meio, ponta] });
     // sombra no chão
     const cr = Math.cos(b.rumo), sr = Math.sin(b.rumo);
-    g.fillStyle = `rgba(18,24,8,${0.3 + b.deit * 0.08})`; g.beginPath(); g.ellipse(b.x, b.y + 1, 40 * Math.abs(cr) + 17 * Math.abs(sr), (17 * Math.abs(cr) + 40 * Math.abs(sr)) * FY * 0.6, 0, 0, TAU); g.fill();
+    g.fillStyle = `rgba(18,24,8,${0.3 + b.deit * 0.08})`; g.beginPath(); g.ellipse(b.x, b.y + 1, 41 * Math.abs(cr) + 18 * Math.abs(sr), (18 * Math.abs(cr) + 41 * Math.abs(sr)) * FY * 0.6, 0, 0, TAU); g.fill();
     // do fundo para a frente; o corpo entra na ordem pela profundidade do barril
     const itens = [...soltas, { prof: barril.prof, corpo: true }].sort((a, c) => a.prof - c.prof);
     for (const p of itens) {
       if (p.corpo) pintarCorpo(g, corpo, pele, barril);
       else if (p.rabo) {
         const [a, m, c] = p.rabo;
-        g.strokeStyle = tom(pele, 0.8); g.lineWidth = 2.3; g.lineCap = 'round'; g.beginPath(); g.moveTo(a[0], a[1]); g.quadraticCurveTo(m[0], m[1], c[0], c[1]); g.stroke();
-        g.fillStyle = v.mancha || '#3a2418'; g.beginPath(); g.ellipse(c[0], c[1] + 1, 2.6, 4.4, 0, 0, TAU); g.fill();
-      } else pintarPeca(g, p);
+        g.strokeStyle = tom(pele, 0.78); g.lineWidth = 1.9; g.lineCap = 'round'; g.beginPath(); g.moveTo(a[0], a[1]); g.quadraticCurveTo(m[0], m[1], c[0], c[1]); g.stroke();
+        g.fillStyle = v.mancha || '#3a2418'; g.beginPath(); g.ellipse(c[0], c[1] + 2, 2.4, 5, 0, 0, TAU); g.fill();
+      } else {
+        pintarPeca(g, p);
+        if (p.brilho === true) { g.fillStyle = 'rgba(255,255,255,.85)'; g.beginPath(); g.arc(p.sx - p.rx * 0.3, p.sy - p.ry * 0.35, Math.max(0.5, p.rx * 0.32), 0, TAU); g.fill(); } // brilho do olho
+      }
     }
   }
 
