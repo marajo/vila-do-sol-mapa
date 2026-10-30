@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#2f3f1c">
+  <title>Vila do Sol · protótipo do mapa novo</title>
+  <style>
+    html, body { margin: 0; height: 100%; overflow: hidden; background: #2f3a1c; color: #f4efd9; font: 13px/1.35 system-ui, -apple-system, "Segoe UI", sans-serif; }
+    #tela { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; touch-action: none; cursor: grab; }
+    #tela.arrastando { cursor: grabbing; }
+    .caixa { position: fixed; background: rgba(28, 34, 18, .78); border: 1px solid rgba(255, 245, 210, .16); border-radius: 12px; box-shadow: 0 6px 22px rgba(0, 0, 0, .28); backdrop-filter: blur(3px); }
+    #painel { top: 12px; left: 12px; padding: 10px 12px; max-width: 360px; }
+    #painel b { display: block; font-size: 14px; }
+    #painel small { display: block; opacity: .78; margin-top: 2px; }
+    .botoes { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 6px; }
+    .botoes button { font: inherit; font-size: 12px; color: #2b2a17; background: #e9e1bf; border: 0; border-radius: 999px; padding: 5px 10px; cursor: pointer; }
+    .botoes button[aria-pressed="true"] { background: #b7d574; }
+    #mini { right: 12px; bottom: 12px; width: 250px; height: 144px; padding: 0; cursor: pointer; touch-action: none; }
+    #medidor { left: 12px; bottom: 12px; padding: 5px 9px; font: 11px ui-monospace, Consolas, monospace; opacity: .85; }
+    #carregando { left: 50%; top: 50%; transform: translate(-50%, -50%); padding: 12px 18px; font-size: 15px; }
+    @media (max-width: 900px), (max-height: 500px) {
+      #painel { top: 6px; left: 6px; padding: 6px 9px; max-width: 290px; }
+      #painel b { font-size: 12px; }
+      #painel .ajuda, #painel .tamanho { display: none; }
+      .botoes { margin: 5px 0 0; gap: 4px; }
+      .botoes button { font-size: 11px; padding: 4px 8px; }
+      #mini { width: 170px; height: 98px; right: 6px; bottom: 6px; }
+      #medidor { left: 6px; bottom: 6px; }
+    }
+  </style>
+</head>
+<body>
+  <canvas id="tela" aria-label="Protótipo do mapa novo da fazenda: capim, rio, ponte e estradas"></canvas>
+  <div id="painel" class="caixa">
+    <b>Vila do Sol · protótipo do mapa novo</b>
+    <small class="tamanho">4950 × 2850 · 3× mais largo e 3× mais alto que o mapa atual</small>
+    <div class="botoes">
+      <button id="bLotes" aria-pressed="false">Mostrar lotes</button>
+      <button id="bVento" aria-pressed="true">Vento</button>
+      <button id="bLonge" aria-pressed="false">Ver mais longe</button>
+      <button id="bAgricultor">Achar o agricultor</button>
+    </div>
+    <small class="ajuda">Arraste para andar pelo mapa · roda do mouse ou pinça para zoom · clique no chão e o agricultor vai até lá (pela ponte, se for do outro lado do rio)</small>
+  </div>
+  <canvas id="mini" class="caixa" aria-label="Mapa inteiro: toque para ir até um lugar"></canvas>
+  <div id="medidor" class="caixa"></div>
+  <div id="carregando" class="caixa">Plantando o capim…</div>
+  <script src="layout.js?v=1"></script>
+  <script src="grama.js?v=1"></script>
+  <script src="mapa.js?v=1"></script>
+</body>
+</html>
