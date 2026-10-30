@@ -43,20 +43,38 @@
           g.fillStyle = '#3f6a22'; g.fillRect(tx - 0.6, ty - 3.4, 1.2, 1.2);
         }
       } },
-      abobora: { nome: 'Abóbora', alto: 16, por: 2, fileiras: 1, pintar(g, x, y, r) {
-        g.strokeStyle = '#6a8a34'; g.lineWidth = 1.4; g.beginPath(); g.moveTo(x - 30, y - 4); g.bezierCurveTo(x - 10, y - 12, x + 10, y + 2, x + 32, y - 6); g.stroke(); // rama
-        for (let i = 0; i < 9; i++) { const lx = x - 28 + i * 7 + (r() - 0.5) * 4, ly = y - 6 - r() * 8; folha(g, lx, ly, 6, 4.6, r(), tom('#5a8a30', 0.85 + r() * 0.3)); g.strokeStyle = 'rgba(30,50,15,.4)'; g.lineWidth = 0.5; g.beginPath(); g.moveTo(lx - 4, ly); g.lineTo(lx + 4, ly); g.stroke(); }
-        const px = x + (r() - 0.5) * 10, py = y - 3; // abóbora com gomos
-        for (const [dx, k] of [[-4, 0.82], [4, 0.82], [0, 1]]) { g.fillStyle = degradeV(g, py - 8, py + 2, [[0, tom('#f08a24', k * 1.15)], [1, tom('#c25e14', k)]]); g.beginPath(); g.ellipse(px + dx, py - 3, 5, 6, 0, 0, TAU); g.fill(); }
-        g.fillStyle = '#5a6a2a'; g.fillRect(px - 0.8, py - 10.5, 1.6, 3);
+      abobora: { nome: 'Abóbora', alto: 18, por: 2, fileiras: 2, pintar(g, x, y, r) {
+        g.strokeStyle = '#6a8a34'; g.lineWidth = 1.4; g.beginPath(); g.moveTo(x - 30, y - 3); g.bezierCurveTo(x - 10, y - 11, x + 10, y + 3, x + 32, y - 5); g.stroke(); // rama
+        g.lineWidth = 0.7; for (let i = 0; i < 3; i++) { const gx = x - 20 + i * 18; g.beginPath(); g.moveTo(gx, y - 6); g.bezierCurveTo(gx + 3, y - 12, gx + 7, y - 4, gx + 4, y - 9); g.stroke(); } // gavinhas
+        for (let i = 0; i < 14; i++) { // folhas grandes, recortadas, com nervuras
+          const lx = x - 30 + i * 4.6 + (r() - 0.5) * 4, ly = y - 5 - r() * 10, rr = 5 + r() * 2.5;
+          folha(g, lx, ly, rr, rr * 0.78, r(), tom('#5a8a30', 0.82 + r() * 0.35));
+          g.strokeStyle = 'rgba(25,45,12,.4)'; g.lineWidth = 0.5; g.beginPath(); for (const a of [-0.9, 0, 0.9]) { g.moveTo(lx, ly + rr * 0.4); g.lineTo(lx + Math.sin(a) * rr * 0.8, ly - Math.cos(a) * rr * 0.6); } g.stroke();
+        }
+        for (let n = r() < 0.6 ? 2 : 1, j = 0; j < n; j++) { // abóboras com gomos
+          const px = x + (j ? 14 : -8) + (r() - 0.5) * 6, py = y - 2, k0 = 0.9 + r() * 0.2;
+          g.fillStyle = 'rgba(30,25,10,.35)'; g.beginPath(); g.ellipse(px + 2, py + 1, 8, 2.5, 0, 0, TAU); g.fill();
+          for (const [dx, k] of [[-4.5, 0.82], [4.5, 0.82], [0, 1]]) { g.fillStyle = degradeV(g, py - 9, py + 2, [[0, tom('#f39028', k * k0 * 1.15)], [1, tom('#c25e14', k * k0)]]); g.beginPath(); g.ellipse(px + dx, py - 3.5, 5.2, 6.2, 0, 0, TAU); g.fill(); }
+          g.fillStyle = 'rgba(255,240,200,.4)'; g.beginPath(); g.ellipse(px - 1.5, py - 6.5, 1.6, 2.4, 0, 0, TAU); g.fill();
+          g.fillStyle = '#5a6a2a'; g.fillRect(px - 0.9, py - 11.5, 1.8, 3.4);
+        }
       } },
       couve: { nome: 'Couve', alto: 20, por: 4, fileiras: 2, pintar(g, x, y, r) {
         g.strokeStyle = '#a8c08a'; g.lineWidth = 1.6; g.beginPath(); g.moveTo(x, y); g.lineTo(x, y - 8); g.stroke();
         for (let i = 0; i < 7; i++) { const a = -Math.PI / 2 + (i - 3) * 0.45, lx = x + Math.cos(a) * 8, ly = y - 10 + Math.sin(a) * 7; folha(g, lx, ly, 7, 5, a + Math.PI / 2, tom('#4f7f5a', 0.85 + r() * 0.3)); g.strokeStyle = 'rgba(210,230,200,.6)'; g.lineWidth = 0.6; g.beginPath(); g.moveTo(x, y - 9); g.lineTo(lx, ly); g.stroke(); }
       } },
-      alface: { nome: 'Alface', alto: 12, por: 5, fileiras: 2, pintar(g, x, y, r) {
-        for (let i = 0; i < 9; i++) { const a = (i / 9) * TAU, d = i < 6 ? 5 : 2; folha(g, x + Math.cos(a) * d, y - 5 + Math.sin(a) * d * 0.6, 5.5 - d * 0.3, 4, a, tom(i < 6 ? '#7cb342' : '#a5d65c', 0.9 + r() * 0.2)); }
-        g.strokeStyle = 'rgba(230,250,200,.6)'; g.lineWidth = 0.6; for (let i = 0; i < 6; i++) { const a = (i / 6) * TAU; g.beginPath(); g.arc(x + Math.cos(a) * 5, y - 5 + Math.sin(a) * 3, 3, a, a + 2); g.stroke(); }
+      alface: { nome: 'Alface', alto: 14, por: 5, fileiras: 2, pintar(g, x, y, r) {
+        // pé de alface crespa: folhas de fora maiores e mais escuras, de dentro claras, bordas onduladas
+        for (const [n, d, rx, cor] of [[8, 6, 5.2, '#5f9a34'], [7, 3.6, 4.4, '#7cb342'], [5, 1.6, 3.4, '#a5d65c']]) {
+          for (let i = 0; i < n; i++) {
+            const a = (i / n) * TAU + r() * 0.4, lx = x + Math.cos(a) * d, ly = y - 6 + Math.sin(a) * d * 0.62;
+            folha(g, lx, ly, rx, rx * 0.72, a, tom(cor, 0.9 + r() * 0.2));
+            g.strokeStyle = tom(cor, 1.25, 0.7); g.lineWidth = 0.55; g.beginPath();
+            for (let k = 0; k < 4; k++) { const b = a - 1 + k * 0.6; g.moveTo(lx + Math.cos(b) * rx * 0.85, ly + Math.sin(b) * rx * 0.6); g.arc(lx + Math.cos(b) * rx * 0.85, ly + Math.sin(b) * rx * 0.6, 0.9, b, b + 2.4); }
+            g.stroke();
+          }
+        }
+        g.fillStyle = 'rgba(240,255,210,.5)'; g.beginPath(); g.ellipse(x - 1, y - 7.5, 1.8, 1.2, 0, 0, TAU); g.fill();
       } },
       cenoura: { nome: 'Cenoura', alto: 18, por: 7, fileiras: 2, pintar(g, x, y, r) {
         g.fillStyle = '#e8792a'; g.beginPath(); g.ellipse(x, y - 1, 2.6, 1.8, 0, 0, TAU); g.fill(); // ombro da raiz
@@ -164,7 +182,40 @@
         g.strokeStyle = '#8a6438'; g.lineWidth = 1.6; g.beginPath(); g.ellipse(x, base - 16, 14, 2.5, 0, 0, TAU); g.stroke();
       } };
     }
-    return { CULTURAS, ARVORES, canteiro, espantalho, arvore, cesto };
+    function regador(x, base) {
+      return { tipo: 'regador', base, rotulo: 'Regador', pegada: [x - 9, base - 8, x + 9, base], caixa: [x - 18, base - 24, x + 18, base + 6], pintar(g) {
+        g.fillStyle = 'rgba(30,24,10,.3)'; g.beginPath(); g.ellipse(x + 2, base, 10, 3, 0, 0, TAU); g.fill();
+        g.fillStyle = degradeH(g, x - 7, x + 7, [[0, '#b9c2c4'], [0.3, '#e3e8e9'], [1, '#7c8587']]); g.beginPath(); g.moveTo(x - 7, base); g.lineTo(x - 6, base - 13); g.lineTo(x + 6, base - 13); g.lineTo(x + 7, base); g.closePath(); g.fill();
+        g.fillStyle = '#c3cacc'; g.beginPath(); g.ellipse(x, base - 13, 6, 1.8, 0, 0, TAU); g.fill();
+        g.strokeStyle = '#8d9698'; g.lineWidth = 1.6; g.beginPath(); g.moveTo(x + 5, base - 4); g.lineTo(x + 14, base - 14); g.stroke(); // bico
+        g.fillStyle = '#8d9698'; g.beginPath(); g.ellipse(x + 14.5, base - 14.5, 1.8, 2.4, -0.7, 0, TAU); g.fill();
+        g.strokeStyle = '#7c8587'; g.lineWidth = 1.4; g.beginPath(); g.arc(x - 1, base - 14, 5, Math.PI, 0); g.stroke(); // alça
+        g.strokeStyle = 'rgba(255,255,255,.5)'; g.lineWidth = 0.8; g.beginPath(); g.moveTo(x - 4, base - 2); g.lineTo(x - 3.5, base - 11); g.stroke();
+      } };
+    }
+    /** escada de madeira encostada na copa (para colher), com o pé em (x, base) */
+    function escada(x, base) {
+      return { tipo: 'escada', base, rotulo: 'Escada de colheita', pegada: [x - 10, base - 6, x + 10, base], caixa: [x - 30, base - 104, x + 16, base + 6], pintar(g) {
+        g.fillStyle = 'rgba(30,24,10,.3)'; g.beginPath(); g.ellipse(x - 2, base, 12, 3, 0, 0, TAU); g.fill();
+        const topo = [x - 16, base - 96];
+        for (const dx of [-6, 6]) { // montantes
+          g.strokeStyle = '#6e5233'; g.lineWidth = 3.2; g.lineCap = 'round'; g.beginPath(); g.moveTo(x + dx, base); g.lineTo(topo[0] + dx * 0.7, topo[1]); g.stroke();
+          g.strokeStyle = 'rgba(230,200,150,.45)'; g.lineWidth = 1; g.beginPath(); g.moveTo(x + dx - 0.8, base); g.lineTo(topo[0] + dx * 0.7 - 0.8, topo[1]); g.stroke();
+        }
+        g.strokeStyle = '#8a6a44'; g.lineWidth = 2.2;
+        for (let t = 0.1; t < 0.98; t += 0.13) { const cx = x + (topo[0] - x) * t, cy = base + (topo[1] - base) * t, w = 6 - t * 1.8; g.beginPath(); g.moveTo(cx - w, cy); g.lineTo(cx + w, cy); g.stroke(); } // degraus
+      } };
+    }
+    function caixote(x, base, fruta) {
+      return { tipo: 'caixote', base, rotulo: 'Caixote de colheita', pegada: [x - 15, base - 12, x + 15, base], caixa: [x - 20, base - 34, x + 20, base + 6], pintar(g, r) {
+        g.fillStyle = 'rgba(30,24,10,.3)'; g.fillRect(x - 14, base - 1, 32, 5);
+        g.fillStyle = '#7a5a36'; g.fillRect(x - 15, base - 26, 30, 12); // fundo/borda de cima
+        for (let i = 0; i < 12; i++) { g.fillStyle = fruta; g.beginPath(); g.arc(x - 11 + r() * 22, base - 22 + r() * 6, 3, 0, TAU); g.fill(); g.fillStyle = 'rgba(255,255,255,.45)'; g.beginPath(); g.arc(x - 11.8 + r() * 22, base - 23.5 + r() * 6, 0.7, 0, TAU); g.fill(); }
+        for (const yy of [base - 14, base - 7]) { g.fillStyle = degradeV(g, yy, yy + 6, [[0, '#c49a62'], [1, '#93703f']]); g.fillRect(x - 15, yy, 30, 6); g.fillStyle = 'rgba(0,0,0,.25)'; g.fillRect(x - 15, yy + 5.4, 30, 0.8); } // ripas da frente
+        for (const px of [x - 15, x + 12]) { g.fillStyle = '#6e5030'; g.fillRect(px, base - 16, 3, 16); }
+      } };
+    }
+    return { CULTURAS, ARVORES, canteiro, espantalho, arvore, cesto, regador, escada, caixote };
   }
 
   raiz.Plantas = { criar };

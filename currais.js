@@ -209,10 +209,13 @@
         const cols = [[40, 210], [240, 410], [440, 610]], linhas = [[96, ['milho', 'girassol', 'tomate']], [178, ['abobora', 'couve', 'alface']], [316, ['cenoura', 'morango', 'alface']], [400, ['morango', 'cenoura', 'couve']]];
         for (const [b, culturas] of linhas) cols.forEach(([a, c], i) => o.push(P.canteiro(l.x + a, l.x + c, l.y + b, culturas[i])));
         o.push(P.espantalho(l.x + 600, l.y + 240));
+        o.push(P.regador(l.x + 60, l.y + 246));
       } else if (cur.id === 'pomar') { // três fileiras de três árvores; o corredor da porteira fica livre
         const especies = [['laranja', 'maca', 'manga'], ['manga', 'laranja', 'limao'], ['maca', 'manga', 'laranja']];
         [190, 380, 570].forEach((b, j) => [110, 300, 600].forEach((a, i) => o.push(P.arvore(l.x + a, l.y + b, especies[j][i]))));
         o.push(P.cesto(l.x + 520, l.y + 600));
+        o.push(P.escada(l.x + 345, l.y + 384)); // encostada na laranjeira do meio
+        o.push(P.caixote(l.x + 200, l.y + 470, '#f39c1f'), P.caixote(l.x + 470, l.y + 470, '#c8312a'));
       } else {
         o.push(casinha(l.x + 120, l.y + 176, { w: 150, d: 82, H: 50, h1: 32, madeira: '#e7dfcf', friso: '#9b3022', portaL: 26, portaA: 32, elevada: 24, ninhos: true }));
         o.push(comedouroTubo(l.x + 330, l.y + 214));
@@ -391,7 +394,16 @@
             }
           }
         }
-        if (cur.piso === 'horta') { // caminho de terra da porteira até o espantalho
+        if (cur.piso === 'horta') { // terra da horta, corredores cobertos de palha, caminho de terra da porteira ao espantalho
+          g.fillStyle = 'rgba(60,48,26,.5)'; g.fillRect(l.x - 4, l.y - 4, l.w + 8, l.h + 8);
+          g.fillStyle = '#6f5a3c'; g.fillRect(l.x + 2, l.y + 2, l.w - 4, l.h - 4);
+          for (let i = 0; i < l.w * l.h / 120; i++) { g.fillStyle = r() < 0.5 ? 'rgba(45,32,18,.25)' : 'rgba(160,130,90,.22)'; g.beginPath(); g.ellipse(l.x + r() * l.w, l.y + r() * l.h, 1 + r() * 3, 0.8 + r() * 2, r() * 3, 0, 7); g.fill(); }
+          g.lineWidth = 0.9;
+          for (let i = 0; i < l.w * l.h / 70; i++) { // palha (fora do caminho)
+            const sx = l.x + 6 + r() * (l.w - 12), sy = l.y + 6 + r() * (l.h - 12);
+            if (Math.abs(sy - cur.caminhoY) < 22 && sx < l.x + l.w - 44) continue;
+            g.strokeStyle = r() < 0.5 ? 'rgba(214,186,110,.8)' : 'rgba(180,150,80,.75)'; g.beginPath(); g.moveTo(sx, sy); g.lineTo(sx + (r() - 0.5) * 9, sy + (r() - 0.5) * 3); g.stroke();
+          }
           g.lineCap = 'round';
           for (const [w, c] of [[50, 'rgba(60,50,30,.5)'], [40, '#7a6443'], [30, '#8f7350']]) { g.strokeStyle = c; g.lineWidth = w; g.beginPath(); g.moveTo(l.x - 6, cur.caminhoY); g.lineTo(l.x + l.w - 50, cur.caminhoY + 6); g.stroke(); }
           for (let i = 0; i < 90; i++) { g.fillStyle = r() < 0.5 ? 'rgba(60,45,25,.3)' : 'rgba(190,160,115,.3)'; g.beginPath(); g.ellipse(l.x + r() * (l.w - 50), cur.caminhoY - 12 + r() * 24, 1 + r() * 2, 0.8 + r() * 1.4, r() * 3, 0, 7); g.fill(); }
@@ -417,9 +429,8 @@
         if (cur.piso === 'lama') return 0;
         if (cur.piso === 'terreiro') return ruido(x / 34, y / 34, 31) > 0.64 ? 0.3 : 0;
         if (cur.piso === 'horta') {
-          if (cur.objetos.some(o => perto(o, x, y) < 5)) return 0;
-          if (x < cur.l.x + cur.l.w - 44 && Math.abs(y - cur.caminhoY) < 15 + ruido(x / 20, y / 20, 39) * 8) return 0;
-          return 0.6;
+          const l = cur.l, borda = Math.min(x - l.x, l.x + l.w - x, y - l.y, l.y + l.h - y);
+          return borda < 12 + ruido(x / 18, y / 18, 39) * 12 && !cur.objetos.some(o => perto(o, x, y) < 8) ? 0.5 : 0; // só um pouco junto da cerca
         }
         if (cur.piso === 'pomar') { for (const o of cur.objetos) if (perto(o, x, y) < (o.tipo === 'arvore' ? 26 : 4) + ruido(x / 14, y / 14, 41) * 8) return 0; return 1; }
         let m = Math.hypot(x - cur.porteira.x, y - cur.porteira.y) - 30;
