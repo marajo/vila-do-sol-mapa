@@ -397,7 +397,7 @@
     function aparado(x, y) {
       let k = 1;
       for (const cur of currais) {
-        if (dentro(cur, x, y, -2)) return cur.piso === 'pasto' ? (cur.id === 'vacas' ? 0.22 : 0.32) + 0.12 * ruido(x / 60, y / 60, 35) : 0.38; // vacas: pasto bem rapado (aparecem as pernas)
+        if (dentro(cur, x, y, -2)) return cur.piso === 'pasto' ? (cur.id === 'vacas' || cur.id === 'ovelhas' ? 0.22 : 0.32) + 0.12 * ruido(x / 60, y / 60, 35) : 0.38; // vacas: pasto bem rapado (aparecem as pernas)
         // por fora, o capim é roçado junto da cerca (a cerca aparece inteira)
         const l = cur.l, dx = Math.max(l.x - x, 0, x - l.x - l.w), dy = Math.max(l.y - y, 0, y - l.y - l.h), d = Math.hypot(dx, dy) + (ruido(x / 30, y / 30, 37) - 0.5) * 20;
         if (d < 70) k = Math.min(k, d < 20 ? 0.38 : 0.38 + 0.62 * (d - 20) / 50);

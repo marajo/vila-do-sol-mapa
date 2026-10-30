@@ -15,9 +15,9 @@
   const ESP = {
     vaca: { vel: 16, virar: 1.4, giro: 1.1, modelo3d: true, raio: 34, passo: 62, alt: 56, larg: 44, pisa: 15, nomes: ['Mimosa', 'Estrela', 'Malhada', 'Boneca'], vars: ['malhada', 'caramelo', 'malhada', 'marrom'],
       estados: [['pastando', 0.45, 6, 14], ['andando', 0.3], ['parado', 0.13, 2, 6], ['deitado', 0.12, 14, 30]] },
-    ovelha: { vel: 19, virar: 0.9, raio: 22, passo: 34, alt: 38, larg: 28, pisa: 10, nomes: ['Nuvem', 'Algodão', 'Fofinha', 'Dolly', 'Branquinha', 'Lã'], vars: ['cara-preta', 'branca', 'cara-preta', 'branca', 'parda', 'cara-preta'],
+    ovelha: { vel: 19, virar: 0.9, giro: 1.6, modelo3d: true, raio: 22, passo: 34, alt: 38, larg: 28, pisa: 0, rapa: true, nomes: ['Nuvem', 'Algodão', 'Fofinha', 'Dolly', 'Branquinha', 'Lã'], vars: ['cara-preta', 'branca', 'cara-preta', 'branca', 'parda', 'cara-preta'],
       estados: [['pastando', 0.5, 4, 10], ['andando', 0.3], ['parado', 0.12, 2, 5], ['deitado', 0.08, 10, 22]] },
-    porco: { vel: 18, virar: 0.9, raio: 22, passo: 30, alt: 34, larg: 30, pisa: 0, nomes: ['Toicinho', 'Rosinha', 'Bolota', 'Torresmo', 'Chiquinho'], vars: ['rosa', 'malhado', 'rosa', 'rosa', 'malhado'],
+    porco: { vel: 18, virar: 0.9, giro: 1.5, modelo3d: true, raio: 22, passo: 30, alt: 34, larg: 30, pisa: 0, nomes: ['Toicinho', 'Rosinha', 'Bolota', 'Torresmo', 'Chiquinho'], vars: ['rosa', 'malhado', 'rosa', 'rosa', 'malhado'],
       estados: [['pastando', 0.35, 3, 8], ['andando', 0.35], ['parado', 0.1, 2, 4], ['deitado', 0.2, 12, 26]] },
     galinha: { vel: 34, virar: 0.3, raio: 9, passo: 12, alt: 30, larg: 12, pisa: 0, nomes: ['Galo Chico', 'Carijó', 'Ruiva', 'Nevada', 'Pretinha', 'Pintadinha', 'Cocó', 'Dona Filó'], vars: ['galo', 'carijo', 'caipira', 'branca', 'preta', 'carijo', 'caipira', 'branca'],
       estados: [['pastando', 0.55, 0.8, 2.6], ['andando', 0.4], ['parado', 0.05, 1, 3]] },
@@ -194,63 +194,100 @@
     }
   }
 
-  // ---------- ovelha ----------
-  const OVELHA = { 'cara-preta': ['#f3eee2', '#2a2421'], branca: ['#f6f2e8', '#e5d6c3'], parda: ['#d6c4a8', '#4a3a2e'] };
+  /** pernas 3D em dois gomos com casco; a coxa entra no corpo (mesma cor) e a canela fica à parte */
+  function pernas3d(b, corpo, soltas, quadris, o) {
+    for (const [hx, hy, off, frente] of quadris) {
+      const s = b.fase + off * TAU;
+      let a = Math.sin(s) * o.amp * b.andar, k = Math.max(0, -Math.cos(s)) * o.amp * 1.5 * b.andar;
+      a = a * (1 - b.deit) + b.deit * (frente ? -1.35 : 1.25); k = k * (1 - b.deit) + b.deit * (frente ? 2.2 : -2.2);
+      const enc = 1 - b.deit * 0.4, quadril = [hx, hy, o.alt - o.dz], joelho = soma(quadril, rotY(a, [0, 0, -o.coxa * enc]));
+      (o.coxaNoCorpo ? corpo : soltas).push(peca(b, soma(quadril, rotY(a, [0, 0, -o.coxa * 0.45 * enc])), [o.rc, o.rc * 0.9, o.coxa * 0.6 * enc], a, o.corCoxa, { contorno: !o.coxaNoCorpo, forca: 0.8 }));
+      soltas.push(peca(b, soma(joelho, rotY(a + k, [0, 0, -o.canela * 0.5 * enc])), [o.rk, o.rk, o.canela * 0.55 * enc], a + k, o.corCanela, { contorno: true, forca: 0.7 }));
+      soltas.push(peca(b, soma(joelho, rotY(a + k, [0, 0, -o.canela * enc])), [o.rk * 1.05, o.rk * 1.05, o.rk * 0.6], a + k, o.casco, { forca: 0.3 }));
+    }
+  }
+  function sombraChao(g, b, comp, larg, a) {
+    const cr = Math.abs(Math.cos(b.rumo)), sr = Math.abs(Math.sin(b.rumo));
+    g.fillStyle = `rgba(18,24,8,${a})`; g.beginPath(); g.ellipse(b.x, b.y + 1, comp * cr + larg * sr, (larg * cr + comp * sr) * FY * 0.6, 0, 0, TAU); g.fill();
+  }
+  function desenharItens(g, itens, corpo, cor, base, extra) {
+    itens.sort((a, c) => a.prof - c.prof);
+    for (const p of itens) {
+      if (p.corpo) pintarCorpo(g, corpo, cor, base);
+      else if (p.fn) p.fn();
+      else {
+        pintarPeca(g, p);
+        if (p.brilho === true) { g.fillStyle = 'rgba(255,255,255,.85)'; g.beginPath(); g.arc(p.sx - p.rx * 0.3, p.sy - p.ry * 0.35, Math.max(0.45, p.rx * 0.32), 0, TAU); g.fill(); }
+      }
+    }
+    void extra;
+  }
+  const ponto3d = (b, c) => { const w = rotZ(b.rumo, c), [tx, ty] = tela(w); return [b.x + tx, b.y + ty, dot(w, VISTA)]; };
+
+  // ---------- ovelha em 3D ----------
+  // corpo de lã em nuvem (uma elipse grande cercada de tufos, pintados como uma peça só, com cachos presos na
+  // superfície), pernas finas escuras, cara preta/branca/parda com topete de lã, orelhas na horizontal
+  const OVELHA = { 'cara-preta': ['#f3eee2', '#2a2421'], branca: ['#f6f2e8', '#e2d3c0'], parda: ['#d6c4a8', '#4a3a2e'] };
   function ovelha(g, b, agora) {
-    const [la, cara] = OVELHA[b.var], oy = b.deit * 12, r = sorteio(b.sem);
-    sombra(g, 26, 6, 0.28);
-    pernas(g, b, [[-13, -14 + oy, 0.5, true], [11, -14 + oy, 0.75, true], [-15, -13 + oy, 0, false], [9, -13 + oy, 0.25, false]], 15, 3.4, cara, '#1d1916', 0.5);
-    // lã: elipse cercada de cachos
-    const cx = -2, cy = -25 + oy;
-    g.save(); g.beginPath(); g.ellipse(cx, cy, 24, 13, 0, 0, TAU);
-    for (let k = 0; k < 16; k++) { const a = (k / 16) * TAU; g.moveTo(cx + Math.cos(a) * 23 + 6.5, cy + Math.sin(a) * 12.5); g.arc(cx + Math.cos(a) * 23, cy + Math.sin(a) * 12.5, 6 + ((k * 7) % 3), 0, TAU); }
-    g.fillStyle = la; g.fill(); g.clip();
-    g.strokeStyle = tom(la, 0.82, 0.55); g.lineWidth = 0.9;
-    for (let i = 0; i < 26; i++) { const x = cx - 26 + r() * 52, y = cy - 16 + r() * 28; g.beginPath(); g.arc(x, y, 2.2 + r() * 1.5, r() * 3, r() * 3 + 3.5); g.stroke(); }
-    volume(g, cy - 20, cy + 16, [cx - 2, cy - 11, 18, 3]);
-    g.restore();
-    // cabeça
-    const ca = -0.25 + b.cab * 1.25 + Math.sin(agora * 0.9 + b.sem) * 0.05 * (1 - b.cab), px = 18, py = -26 + oy;
-    g.save(); g.translate(px, py); g.rotate(ca);
-    const mast = b.cab > 0.5 ? Math.sin(agora * 8 + b.sem) * 0.6 : 0;
-    g.fillStyle = cara; g.beginPath(); g.ellipse(9, 1, 10, 6.4 + mast * 0.3, 0.15, 0, TAU); g.fill();
-    g.fillStyle = tom(cara, 0.85); g.beginPath(); g.ellipse(2, -2, 7, 2.4, -0.5 + Math.sin(agora * 2.5 + b.sem) * 0.1, 0, TAU); g.fill(); // orelha
-    g.fillStyle = la; g.beginPath(); g.arc(2, -4, 5.5, 0, TAU); g.fill(); // topete de lã
-    g.fillStyle = b.var === 'branca' ? '#2a2421' : '#d9cfc2'; g.beginPath(); g.arc(11, -1.5, 1.4, 0, TAU); g.fill();
-    g.fillStyle = 'rgba(20,10,5,.5)'; g.beginPath(); g.arc(18, 2, 0.9, 0, TAU); g.fill();
-    g.restore();
-    g.fillStyle = la; g.beginPath(); g.arc(-26, -26 + oy, 4.5, 0, TAU); g.fill(); // rabinho
+    const [la, cara] = OVELHA[b.var], dz = b.deit * 12, r = sorteio(b.sem);
+    if (!b.tufos) { // tufos e cachos sorteados uma vez
+      b.tufos = Array.from({ length: 14 }, () => { const u = norm([r() * 2 - 1, r() * 2 - 1, r() * 1.4 - 0.3]); return [u, 5.5 + r() * 2.5]; });
+      b.cachos = Array.from({ length: 30 }, () => [norm([r() * 2 - 1, r() * 2 - 1, r() * 1.6 - 0.4]), 1.5 + r() * 1.1, tom(la, 0.95)]); // cachinhos discretos
+    }
+    const corpo = [], soltas = [], C = [-2, 0, 27 - dz], R = [19, 12.5, 11];
+    const base = peca(b, C, R, 0, la, { manchas: b.cachos });
+    corpo.push(base);
+    for (const [u, rr] of b.tufos) corpo.push(peca(b, [C[0] + u[0] * R[0] * 0.92, u[1] * R[1] * 0.92, C[2] + u[2] * R[2] * 0.92], [rr, rr, rr * 0.9], 0, la));
+    corpo.push(peca(b, [-21, 0, 28 - dz], [4.5, 4.5, 4.5], 0, la)); // rabinho
+    pernas3d(b, corpo, soltas, [[-11, 6, 0, false], [10, 6, 0.25, true], [-11, -6, 0.5, false], [10, -6, 0.75, true]],
+      { amp: 0.5, alt: 18, dz, coxa: 9, canela: 8, rc: 2.8, rk: 1.9, corCoxa: cara, corCanela: cara, casco: '#1d1916', coxaNoCorpo: false });
+    // pescoço curto de lã e cabeça
+    const np = -0.3 + b.cab * 1.25 + Math.sin(agora * 0.9 + b.sem) * 0.05 * (1 - b.cab), nb = [14, 0, 29 - dz];
+    corpo.push(peca(b, soma(nb, rotY(np, [5, 0, 0])), [8, 7.5, 8.5], np, la));
+    const hb = soma(nb, rotY(np, [12, 0, 0])), hp = np + 0.55, mast = b.cab > 0.5 ? Math.sin(agora * 8 + b.sem) * 0.5 : 0;
+    const cabeca = (c, rr, cor, extra) => soltas.push(peca(b, soma(hb, rotY(hp, c)), rr, hp, cor, extra));
+    cabeca([4, 0, 0], [8, 5, 5.6], cara, { contorno: true });
+    cabeca([10.5, 0, -1.2 + mast * 0.2], [3.4, 3.7, 3.4], tom(cara, 0.9), { contorno: true, forca: 0.7 });
+    cabeca([-0.5, 0, 4], [5, 5.5, 3.6], la, { forca: 0.8 }); // topete de lã
+    for (const lado of [-1, 1]) {
+      cabeca([0, lado * 6.5, 1.5], [2, 4.4, 1.2], tom(cara, 0.88), { contorno: true });
+      cabeca([4.5, lado * 4.6, 1.8], [1.4, 1.1, 1.4], b.var === 'branca' ? '#2a2421' : '#d9cfc2', { forca: 0, brilho: b.var === 'branca' });
+    }
+    sombraChao(g, b, 25, 14, 0.28);
+    desenharItens(g, [...soltas, { prof: base.prof, corpo: true }], corpo, la, base);
   }
 
-  // ---------- porco ----------
+  // ---------- porco em 3D ----------
+  // corpo roliço (barril, paleta e pernil), cabeça que continua o corpo, focinho em disco com narinas, orelhas caídas
+  // para a frente, rabinho enrolado; malhados com manchas pretas e os sujos com lama na barriga (presas na pele)
   const PORCO = { rosa: ['#f1b0a6', null], malhado: ['#f0b7ab', '#2b2525'] };
   function porco(g, b, agora) {
-    const [pele, mancha] = PORCO[b.var], oy = b.deit * 8, r = sorteio(b.sem);
-    sombra(g, 28, 6, 0.3);
-    pernas(g, b, [[-15, -11 + oy, 0.5, true], [14, -11 + oy, 0.75, true], [-17, -10 + oy, 0, false], [12, -10 + oy, 0.25, false]], 11, 5, tom(pele, 0.88), '#5a4a44', 0.5);
-    // rabo enrolado
-    g.strokeStyle = tom(pele, 0.85); g.lineWidth = 1.6; g.beginPath();
-    const tw = Math.sin(agora * 4 + b.sem) * 0.6;
-    g.moveTo(-27, -22 + oy); g.bezierCurveTo(-33, -24 + oy + tw, -34, -18 + oy, -30, -18 + oy); g.bezierCurveTo(-27, -18 + oy, -28, -22 + oy, -31, -22 + oy); g.stroke();
-    const fo = b.cab * 4; // focinho desce para fuçar
-    g.save(); g.beginPath();
-    g.moveTo(-27, -19 + oy);
-    g.bezierCurveTo(-29, -29 + oy, -18, -32 + oy, 0, -31 + oy);
-    g.bezierCurveTo(14, -31 + oy, 24, -30 + oy, 28, -24 + oy + fo * 0.5);
-    g.bezierCurveTo(31, -20 + oy + fo, 32, -14 + oy + fo, 28, -11 + oy + fo * 0.6);
-    g.bezierCurveTo(18, -7 + oy, -6, -6 + oy, -20, -8 + oy);
-    g.bezierCurveTo(-26, -9 + oy, -28, -14 + oy, -27, -19 + oy);
-    g.closePath();
-    g.fillStyle = pele; g.fill(); g.strokeStyle = 'rgba(120,60,50,.35)'; g.lineWidth = 0.9; g.stroke(); g.clip();
-    if (mancha) for (let i = 0; i < 3; i++) { g.fillStyle = mancha; g.beginPath(); g.ellipse(-20 + r() * 34, -28 + r() * 16 + oy, 5 + r() * 6, 4 + r() * 4, r() * 3, 0, TAU); g.fill(); }
-    if (b.sujo || b.deit > 0.3) { g.fillStyle = 'rgba(70,48,28,.55)'; g.fillRect(-30, -14 + oy, 64, 10); for (let i = 0; i < 6; i++) { g.beginPath(); g.ellipse(-24 + r() * 46, -15 + oy, 2 + r() * 3, 2 + r() * 3, 0, 0, TAU); g.fill(); } }
-    volume(g, -33 + oy, -6 + oy, [-4, -28 + oy, 20, 2.6]);
-    g.restore();
-    g.fillStyle = '#e48d86'; g.beginPath(); g.ellipse(32, -17.5 + oy + fo, 3.6, 4.6, 0, 0, TAU); g.fill(); // focinho
-    g.fillStyle = '#9b4e4a'; for (const ny of [-19.2, -15.8]) { g.beginPath(); g.ellipse(33.4, ny + oy + fo, 0.9, 1.1, 0, 0, TAU); g.fill(); }
-    g.fillStyle = '#1b1414'; g.beginPath(); g.arc(23.5, -23 + oy + fo * 0.4, 1.4, 0, TAU); g.fill();
-    g.fillStyle = tom(pele, 0.9); g.beginPath(); g.moveTo(16, -29 + oy); g.quadraticCurveTo(23, -38 + oy + Math.sin(agora * 2 + b.sem), 27, -27 + oy + fo * 0.3); g.closePath(); g.fill(); // orelha caída para a frente
-    g.fillStyle = 'rgba(200,110,105,.5)'; g.beginPath(); g.moveTo(18, -29 + oy); g.quadraticCurveTo(22, -34 + oy, 24, -28 + oy); g.closePath(); g.fill();
+    const [pele, mancha] = PORCO[b.var], dz = b.deit * 7, r = sorteio(b.sem);
+    if (!b.pintas) {
+      b.pintas = mancha ? Array.from({ length: 4 }, () => [norm([r() * 2 - 1, r() * 2 - 1, r() * 1.4 - 0.2]), 6 + r() * 6, mancha]) : [];
+      b.lama = Array.from({ length: 7 }, () => [norm([r() * 2 - 1, r() * 2 - 1, -0.4 - r() * 0.6]), 4 + r() * 4, 'rgba(84,58,34,.75)']);
+    }
+    const sujo = b.sujo || b.deit > 0.3, pintas = sujo ? [...b.pintas, ...b.lama] : b.pintas;
+    const corpo = [], soltas = [];
+    const base = peca(b, [-1, 0, 19 - dz], [23, 13, 11.5], 0, pele, { manchas: pintas });
+    corpo.push(base, peca(b, [-16, 0, 19.5 - dz], [10, 12.5, 11], 0.05, pele, { manchas: sujo ? b.lama.slice(0, 3) : null }), peca(b, [13, 0, 19.5 - dz], [10, 12, 11], -0.05, pele));
+    pernas3d(b, corpo, soltas, [[-15, 7, 0, false], [13, 7, 0.25, true], [-15, -7, 0.5, false], [13, -7, 0.75, true]],
+      { amp: 0.5, alt: 12, dz, coxa: 6, canela: 6, rc: 4, rk: 2.7, corCoxa: pele, corCanela: tom(pele, 0.9), casco: '#5a4a44', coxaNoCorpo: true });
+    // cabeça: desce para fuçar, girando no pescoço
+    const ca = b.cab * 0.45, nb = [18, 0, 20 - dz];
+    const H = c => soma(nb, rotY(ca, c));
+    corpo.push(peca(b, H([8, 0, -1]), [9, 9, 8.6], ca, pele));
+    soltas.push(peca(b, H([17, 0, -3]), [2.6, 4.6, 4.1], ca + 0.05, '#e48d86', { contorno: true, forca: 0.6 }));
+    for (const lado of [-1, 1]) {
+      soltas.push(peca(b, H([19.3, lado * 1.8, -3]), [0.6, 1, 1.3], ca, '#9b4e4a', { forca: 0 }));
+      soltas.push(peca(b, H([11, lado * 5.6, 2.5]), [1.3, 1, 1.3], ca, '#1b1414', { forca: 0, brilho: true }));
+      soltas.push(peca(b, H([9, lado * 5.5, 8]), [5.4, 3.4, 1.4], ca + 0.75 + Math.sin(agora * 2 + b.sem + lado) * 0.08, tom(pele, 0.92), { contorno: true, forca: 0.7 }));
+    }
+    // rabinho enrolado
+    const raiz = ponto3d(b, [-24, 0, 24 - dz]), tw = Math.sin(agora * 4 + b.sem) * 0.8;
+    soltas.push({ prof: raiz[2] - 2, fn: () => { g.strokeStyle = tom(pele, 0.82); g.lineWidth = 1.5; g.lineCap = 'round'; g.beginPath(); g.moveTo(raiz[0], raiz[1]); g.bezierCurveTo(raiz[0] - 5, raiz[1] - 3 + tw, raiz[0] - 6, raiz[1] + 3, raiz[0] - 2, raiz[1] + 3); g.bezierCurveTo(raiz[0] + 1, raiz[1] + 2, raiz[0], raiz[1] - 1, raiz[0] - 3, raiz[1]); g.stroke(); } });
+    sombraChao(g, b, 27, 14, 0.3);
+    desenharItens(g, [...soltas, { prof: base.prof, corpo: true }], corpo, pele, base);
   }
 
   // ---------- galinha e galo ----------
@@ -375,7 +412,7 @@
           const ux = Math.cos(b.rumo), uy = Math.sin(b.rumo), s = Math.min(d, e.vel * Math.max(0.22, Math.cos(dif)) * dt), nx = b.x + ux * s, ny = b.y + uy * s;
           if (!livre(b.cur, e, nx, ny) || perto(b, nx, ny)) { escolher(b); continue; }
           b.x = nx; b.y = ny; b.fase += (s / e.passo) * TAU; b.rastro += s;
-          if (e.pisa && b.rastro > 7 && grama) { b.rastro = 0; grama.pisar(b.x, b.y + 2, ux, uy, agora, e.pisa, 6); }
+          if (e.pisa && b.rastro > 7 && grama) { b.rastro = 0; grama.pisar(b.x, b.y + 2, ux, uy, agora, e.pisa, 4); }
         } else if (b.estado === 'andando') {
           if (!anda || b.reservado) continue; // levantando antes de sair
           const [tx, ty] = b.alvo, dx = tx - b.x, dy = ty - b.y, d = Math.hypot(dx, dy);
@@ -389,11 +426,11 @@
           const s = Math.min(d, e.vel * (virando ? 0.4 : 1) * dt), nx = b.x + (ux / un) * s, ny = b.y + (uy / un) * s;
           if (!livre(b.cur, e, nx, ny) || perto(b, nx, ny)) { escolher(b); continue; }
           b.x = nx; b.y = ny; b.fase += (s / e.passo) * TAU; b.rastro += s;
-          if (e.pisa && b.rastro > 7 && grama) { b.rastro = 0; grama.pisar(b.x, b.y + 2, ux, uy, agora, e.pisa, 6); }
+          if (e.pisa && b.rastro > 7 && grama) { b.rastro = 0; grama.pisar(b.x, b.y + 2, ux, uy, agora, e.pisa, 4); }
         } else {
           b.incl += (0 - b.incl) * Math.min(1, dt * 2);
           if (!b.reservado) { b.t -= dt; if (b.t <= 0) escolher(b); }
-          if (b.estado === 'pastando' && grama && e.pisa && Math.random() < dt * 0.15) grama.aparar(b.x + (e.modelo3d ? Math.cos(b.rumo) * 50 : b.lado * e.larg * 0.9), b.y + (e.modelo3d ? Math.sin(b.rumo) * 50 : 0), 9, 0.75, 4); // o pasto vai ficando rapado onde comem
+          if (b.estado === 'pastando' && grama && (e.pisa || e.rapa) && Math.random() < dt * 0.15) grama.aparar(b.x + (e.modelo3d ? Math.cos(b.rumo) * e.larg * 1.1 : b.lado * e.larg * 0.9), b.y + (e.modelo3d ? Math.sin(b.rumo) * e.larg * 1.1 : 0), 9, 0.75, 4); // o pasto vai ficando rapado onde comem
         }
         if (b.reservado) continue; // quem está sendo ordenhado/tosquiado não é empurrado
         // não se sobrepor: quem anda desvia (muda de rumo) de quem está na frente; quem está parado dá uns passinhos
@@ -422,7 +459,7 @@
     }
     // cada bicho é desenhado numa imagem própria (na resolução da tela) e a imagem vai para o mapa; a pose é refeita em
     // revezamento (metade dos bichos por quadro = 15 poses/s), o lugar acompanha todo quadro: o mesmo visual, metade do custo
-    const CAIXA = { vaca: [-82, -116, 82, 54], ovelha: [-46, -62, 46, 14], porco: [-46, -54, 50, 14], galinha: [-36, -58, 36, 12] };
+    const CAIXA = { vaca: [-82, -116, 82, 54], ovelha: [-54, -72, 54, 36], porco: [-56, -64, 56, 38], galinha: [-36, -58, 36, 12] };
     let quadroN = 0;
     function posar(g, b, agora) { // desenha o bicho com o pé em (b.x, b.y) do mundo
       if (b.e.modelo3d) { DESENHO[b.tipo](g, b, agora); return; }

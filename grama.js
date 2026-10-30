@@ -243,7 +243,9 @@
           this.desenhar(p, agora);
         }
       // 2) mexidos (pisões): redesenha os mais antigos
-      for (let n = Math.min(this.porQuadro, this.fila.length); n > 0; n--) { const p = this.fila.shift(); if (p.cv && p.d) this.desenhar(p, agora); else p.mexido = false; }
+      // no máximo ~1,5 ms por quadro (pelo menos 2 pedaços); os pisados se revezam e voltam ao lugar a ~10 quadros/s
+      const limite = performance.now() + 1.5;
+      for (let n = 0; n < this.porQuadro && this.fila.length && (n < 2 || performance.now() < limite); n++) { const p = this.fila.shift(); if (p.cv && p.d) this.desenhar(p, agora); else p.mexido = false; }
       // 3) sobra de tempo: prepara uma faixa em volta da tela (andar com a câmera sem ver o capim nascer)
       if (!faltam) {
         const ml0 = Math.max(0, l0 - 10), ml1 = Math.min(this.rows - 1, l1 + 10), mc0 = Math.max(0, c0 - 2), mc1 = Math.min(this.cols - 1, c1 + 2);
