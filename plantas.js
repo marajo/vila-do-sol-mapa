@@ -131,45 +131,107 @@
       } };
     }
 
-    // ---------- árvores frutíferas ----------
+    // ---------- árvores frutíferas (folha por folha, como a grama) ----------
+    // A copa é um volume 3D (elipsoide) cheio de tufos; cada tufo é um monte de folhinhas desenhadas uma a uma, com
+    // três tons (sombra, meio, luz) conforme o lado do sol (noroeste) e se estão por dentro ou por fora da copa.
+    // Projeção da câmera a 45° igual à dos bichos. Ordem: folhas de trás, galhos, frutas e folhas da frente misturadas
+    // pela profundidade; o tronco com casca e raízes aparece embaixo da copa.
     const ARVORES = {
-      laranja: { nome: 'Laranjeira', folha: ['#2f5f24', '#3f7a2c', '#5a9a3a'], fruta: ['#f39c1f', '#f7b23a'], copa: [72, 62], tronco: '#6b5038' },
-      maca: { nome: 'Macieira', folha: ['#3f6f2a', '#5a8a34', '#7aac48'], fruta: ['#c8312a', '#e0483a'], copa: [70, 58], tronco: '#5f4632' },
-      manga: { nome: 'Mangueira', folha: ['#244f22', '#336a2a', '#4f8a38'], fruta: ['#f2b33d', '#e8752a'], copa: [80, 68], tronco: '#5a4430' },
-      limao: { nome: 'Limoeiro', folha: ['#2f6a2a', '#43863a', '#62a84a'], fruta: ['#d8de3a', '#c4d630'], copa: [64, 54], tronco: '#6a5440' },
+      laranja: { nome: 'Laranjeira', copa: [62, 54, 56], altura: 92, folha: [4.6, 2.5], n: 3000, tufos: 20, caida: 0.25,
+        tons: ['#14361a', '#245a22', '#3f7f2e', '#76ad4e'], fruta: '#f39c1f', frutaR: 3.7, frutas: 42, tronco: '#6b5038', brilho: true },
+      maca: { nome: 'Macieira', copa: [68, 58, 50], altura: 86, folha: [4.6, 2.9], n: 2500, tufos: 14, caida: 0.15,
+        tons: ['#22461b', '#3a6b29', '#5a953f', '#97c466'], fruta: '#c8312a', frutaR: 3.6, frutas: 36, tronco: '#5f4632' },
+      manga: { nome: 'Mangueira', copa: [80, 68, 64], altura: 100, folha: [7, 2.2], n: 3400, tufos: 22, caida: 0.65,
+        tons: ['#0e2b17', '#1c4a20', '#33682a', '#679845'], fruta: '#f2b33d', frutaR: 4.4, frutas: 26, tronco: '#5a4430', manga: true },
+      limao: { nome: 'Limoeiro', copa: [50, 44, 46], altura: 76, folha: [4.2, 2.3], n: 2100, tufos: 16, caida: 0.2,
+        tons: ['#1a441b', '#2f6a28', '#4f9038', '#8fc35e'], fruta: '#d8de3a', frutaR: 3.1, frutas: 36, tronco: '#6a5440', brilho: true },
     };
+    const FY = 0.66, FZ = 0.9;
+    const nrm = v => { const n = Math.hypot(v[0], v[1], v[2]) || 1; return [v[0] / n, v[1] / n, v[2] / n]; };
+    const SOL = nrm([-0.5, -0.55, 0.75]), VISTA = nrm([0, FZ, FY]);
+    /** mistura de três tons pela luz (0 = sombra, 1 = sol) */
+    function tomFolha(t, l) {
+      const k = Math.max(0, Math.min(1, l)), [a, b] = k < 0.5 ? [t[0], t[1]] : [t[1], t[2]], u = k < 0.5 ? k * 2 : k * 2 - 1;
+      const c1 = [parseInt(a.slice(1, 3), 16), parseInt(a.slice(3, 5), 16), parseInt(a.slice(5, 7), 16)], c2 = [parseInt(b.slice(1, 3), 16), parseInt(b.slice(3, 5), 16), parseInt(b.slice(5, 7), 16)];
+      return `rgb(${Math.round(c1[0] + (c2[0] - c1[0]) * u)},${Math.round(c1[1] + (c2[1] - c1[1]) * u)},${Math.round(c1[2] + (c2[2] - c1[2]) * u)})`;
+    }
     function arvore(x, base, tipo) {
-      const A = ARVORES[tipo], [cr, cv] = A.copa, alt = 50, cy = base - alt - cv * 0.72; // árvore adulta: ~3 vezes a altura de uma pessoa
-      return { tipo: 'arvore', base, especie: tipo, rotulo: A.nome, balanca: true, pegada: [x - 14, base - 10, x + 14, base], caixa: [x - cr - 22, cy - cv - 14, x + cr + 22, base + 12], pintar(g, r) {
-        // sombra no chão (sol a oeste-noroeste)
-        g.fillStyle = 'rgba(18,28,8,.28)'; g.beginPath(); g.ellipse(x + 26, base - 6, cr * 0.95, cr * 0.34, 0, 0, TAU); g.fill();
-        // tronco com raízes, casca e galhos
-        g.fillStyle = degradeH(g, x - 9, x + 9, [[0, tom(A.tronco, 1.25)], [0.45, A.tronco], [1, tom(A.tronco, 0.6)]]);
-        g.beginPath(); g.moveTo(x - 13, base); g.quadraticCurveTo(x - 7, base - 5, x - 7, base - 16); g.lineTo(x - 5, base - alt); g.lineTo(x + 5, base - alt); g.lineTo(x + 7, base - 16); g.quadraticCurveTo(x + 7, base - 5, x + 14, base); g.closePath(); g.fill();
-        g.strokeStyle = tom(A.tronco, 0.6, 0.6); g.lineWidth = 0.7; for (let i = 0; i < 9; i++) { const bx = x - 6 + r() * 12; g.beginPath(); g.moveTo(bx, base - 2); g.quadraticCurveTo(bx + (r() - 0.5) * 3, base - alt / 2, bx + (r() - 0.5) * 2, base - alt + 2); g.stroke(); }
-        g.strokeStyle = A.tronco; g.lineCap = 'round';
-        for (const [dx, dy, w] of [[-34, -40, 5], [30, -38, 4.6], [-8, -52, 4.2], [14, -48, 3.6], [-22, -30, 3], [24, -26, 2.8]]) { g.lineWidth = w; g.beginPath(); g.moveTo(x, base - alt + 2); g.quadraticCurveTo(x + dx * 0.4, base - alt - 8, x + dx, base - alt + dy); g.stroke(); }
-        // copa: tufos em camadas (de trás/cima para a frente/baixo), luz do noroeste
+      const A = ARVORES[tipo], [rx, ry, rz] = A.copa, cz = A.altura;
+      const tela = (px, py, pz) => [x + px, base + py * FY - pz * FZ];
+      const topo = base - (cz + rz) * FZ - ry * FY;
+      return { tipo: 'arvore', base, especie: tipo, rotulo: A.nome, balanca: true, pegada: [x - 14, base - 10, x + 14, base], caixa: [x - rx - 26, topo - 16, x + rx + 40, base + ry * FY + 18], pintar(g, r) {
+        // sombra no chão (duas camadas, a leste/sudeste)
+        for (const [k, a] of [[1.15, 0.12], [0.85, 0.16]]) { g.fillStyle = `rgba(18,28,8,${a})`; g.beginPath(); g.ellipse(x + 30, base + 2, rx * k, ry * FY * k * 0.9, 0, 0, TAU); g.fill(); }
+        // tufos (montes de folhas) espalhados pela superfície da copa: borda irregular e vãos entre eles
         const tufos = [];
-        for (let i = 0; i < 44; i++) { const a = r() * TAU, d = Math.sqrt(r()); tufos.push([x + Math.cos(a) * cr * d * 0.82, cy + Math.sin(a) * cv * d * 0.78, 14 + r() * 12]); } // borda irregular, não uma bola
-        tufos.sort((a, b) => a[1] - b[1]);
-        g.fillStyle = tom(A.folha[0], 0.85); g.beginPath(); g.ellipse(x, cy + 4, cr * 0.92, cv * 0.85, 0, 0, TAU); g.fill(); // massa escura de fundo
-        for (const [tx, ty, tr] of tufos) {
-          const luz = 0.85 + 0.3 * ((x - tx) / cr * 0.5 + (cy - ty) / cv * 0.6 + 0.5);
-          const gr = g.createRadialGradient(tx - tr * 0.35, ty - tr * 0.4, 1, tx, ty, tr);
-          gr.addColorStop(0, tom(A.folha[2], luz)); gr.addColorStop(0.55, tom(A.folha[1], luz)); gr.addColorStop(1, tom(A.folha[0], luz * 0.9));
-          g.fillStyle = gr; g.beginPath(); g.arc(tx, ty, tr, 0, TAU); g.fill();
-          for (let k = 0; k < 14; k++) { const a = r() * TAU, d = r() * tr * 0.9; folha(g, tx + Math.cos(a) * d, ty + Math.sin(a) * d, 3, 1.5, r() * 3, tom(A.folha[r() < 0.6 ? 2 : 1], luz * (0.9 + r() * 0.25))); }
+        for (let i = 0; i < A.tufos; i++) {
+          let u; do { u = [r() * 2 - 1, r() * 2 - 1, r() * 2 - 1]; } while (Math.hypot(...u) > 1 || u[2] < -0.55);
+          const d = 0.55 + 0.4 * Math.sqrt(r()), n = nrm(u);
+          tufos.push({ c: [n[0] * rx * d, n[1] * ry * d, cz + n[2] * rz * d], raio: 0.34 + r() * 0.16 });
         }
-        // frutas penduradas (mais na metade de baixo e nas bordas da copa)
-        const nf = 26 + Math.floor(r() * 12);
-        for (let i = 0; i < nf; i++) {
-          const a = r() * TAU, d = 0.35 + r() * 0.6, fx = x + Math.cos(a) * cr * d * 0.85, fy = cy + Math.abs(Math.sin(a)) * cv * d * 0.7 + 2, rr = tipo === 'manga' ? 3.8 : 3.3;
-          g.fillStyle = A.fruta[r() < 0.7 ? 0 : 1];
-          if (tipo === 'manga') { g.beginPath(); g.ellipse(fx, fy, rr * 0.8, rr * 1.2, 0.4, 0, TAU); g.fill(); g.fillStyle = 'rgba(200,60,40,.45)'; g.beginPath(); g.ellipse(fx - 0.5, fy - 1, rr * 0.5, rr * 0.6, 0.4, 0, TAU); g.fill(); }
-          else { g.beginPath(); g.arc(fx, fy, rr, 0, TAU); g.fill(); }
-          g.fillStyle = 'rgba(255,255,255,.55)'; g.beginPath(); g.arc(fx - 0.8, fy - 0.9, 0.8, 0, TAU); g.fill();
+        // folhas: cada uma num tufo, mais por fora do que por dentro
+        const itens = [];
+        for (let i = 0; i < A.n; i++) {
+          const t = tufos[Math.floor(r() * tufos.length)], s = Math.cbrt(r()) * t.raio;
+          let u; do { u = [r() * 2 - 1, r() * 2 - 1, r() * 2 - 1]; } while (Math.hypot(...u) > 1);
+          const p = [t.c[0] + u[0] * rx * s, t.c[1] + u[1] * ry * s, t.c[2] + u[2] * rz * s];
+          const q = [p[0] / rx, p[1] / ry, (p[2] - cz) / rz], fora = Math.hypot(...q), n = nrm(q);
+          const luz = (0.32 + 0.68 * Math.max(0, n[0] * SOL[0] + n[1] * SOL[1] + n[2] * SOL[2])) * (0.55 + 0.45 * Math.min(1, fora)) + (r() - 0.5) * 0.12;
+          itens.push({ prof: p[1] * VISTA[1] + p[2] * VISTA[2], folha: true, p, luz, ang: (r() - 0.5) * 2.6 + (r() < A.caida ? Math.PI / 2 : 0), tam: 0.75 + r() * 0.5 });
         }
+        // frutas: perto da superfície, mais na metade de baixo e do lado de fora
+        for (let i = 0; i < A.frutas; i++) {
+          let u; do { u = [r() * 2 - 1, r() * 2 - 1, r() * 1.4 - 0.9]; } while (Math.hypot(...u) > 1);
+          const n = nrm(u), d = 0.78 + r() * 0.2, p = [n[0] * rx * d, n[1] * ry * d, cz + n[2] * rz * d];
+          itens.push({ prof: p[1] * VISTA[1] + p[2] * VISTA[2] + 0.5, fruta: true, p, luz: 0.5 + 0.5 * Math.max(0, n[0] * SOL[0] + n[1] * SOL[1] + n[2] * SOL[2]) });
+        }
+        itens.sort((a, b) => a.prof - b.prof);
+        // tronco com raízes e casca
+        const tt = cz - rz * 0.35, base2 = base;
+        const [tx0, ty0] = tela(0, 0, tt);
+        g.fillStyle = degradeH(g, x - 10, x + 10, [[0, tom(A.tronco, 1.25)], [0.45, A.tronco], [1, tom(A.tronco, 0.55)]]);
+        g.beginPath(); g.moveTo(x - 15, base2); g.quadraticCurveTo(x - 8, base2 - 5, x - 8, base2 - 18); g.lineTo(x - 5.5, ty0); g.lineTo(x + 5.5, ty0); g.lineTo(x + 8, base2 - 18); g.quadraticCurveTo(x + 8, base2 - 5, x + 16, base2); g.closePath(); g.fill();
+        g.strokeStyle = tom(A.tronco, 0.55, 0.55); g.lineWidth = 0.7;
+        for (let i = 0; i < 12; i++) { const bx = x - 7 + r() * 14; g.beginPath(); g.moveTo(bx, base2 - 2); g.quadraticCurveTo(bx + (r() - 0.5) * 4, (base2 + ty0) / 2, bx + (r() - 0.5) * 3, ty0 + 2); g.stroke(); }
+        for (let i = 0; i < 5; i++) { g.fillStyle = 'rgba(160,170,120,.35)'; g.beginPath(); g.ellipse(x - 6 + r() * 12, base2 - 6 - r() * (base2 - ty0 - 10), 1.6, 2.6, 0, 0, TAU); g.fill(); } // líquen
+        const desenhaGalhos = () => { // galhos que saem da forquilha para os tufos (aparecem nos vãos)
+          g.lineCap = 'round';
+          tufos.forEach((t, i) => {
+            if (i % 2) return;
+            const m = [t.c[0] * 0.45, t.c[1] * 0.45, tt + (t.c[2] - tt) * 0.5], f = [t.c[0] * 0.8, t.c[1] * 0.8, tt + (t.c[2] - tt) * 0.85];
+            const [ax, ay] = [tx0, ty0], [mx, my] = tela(...m), [fx, fy] = tela(...f);
+            g.strokeStyle = tom(A.tronco, 0.85); g.lineWidth = 4.2; g.beginPath(); g.moveTo(ax, ay); g.lineTo(mx, my); g.stroke();
+            g.lineWidth = 2.2; g.beginPath(); g.moveTo(mx, my); g.lineTo(fx, fy); g.stroke();
+            g.strokeStyle = tom(A.tronco, 1.3, 0.5); g.lineWidth = 1; g.beginPath(); g.moveTo(ax - 1, ay); g.lineTo(mx - 1, my); g.stroke();
+          });
+        };
+        // massa da copa: cada tufo como um volume escuro (a copa não fica transparente)
+        for (const t of [...tufos].sort((a, b) => (a.c[1] * VISTA[1] + a.c[2] * VISTA[2]) - (b.c[1] * VISTA[1] + b.c[2] * VISTA[2]))) {
+          const [sx, sy] = tela(...t.c), q = nrm([t.c[0] / rx, t.c[1] / ry, (t.c[2] - cz) / rz]), l = 0.25 + 0.4 * Math.max(0, q[0] * SOL[0] + q[1] * SOL[1] + q[2] * SOL[2]);
+          g.fillStyle = tomFolha(A.tons, l * 0.6); g.beginPath(); g.ellipse(sx, sy, rx * t.raio * 0.92, (rz * FZ + ry * FY) * t.raio * 0.5, 0, 0, TAU); g.fill();
+        }
+        // copa: folhas de trás, galhos, depois o resto (frutas e folhas da frente) pela profundidade
+        let galhos = false;
+        const [L, W] = A.folha;
+        for (const it of itens) {
+          if (!galhos && it.prof > (cz) * VISTA[2] - ry * 0.2 * VISTA[1]) { desenhaGalhos(); galhos = true; }
+          const [sx, sy] = tela(...it.p);
+          if (it.fruta) {
+            const fr = A.frutaR, gr = g.createRadialGradient(sx - fr * 0.35, sy - fr * 0.4, 0.3, sx, sy, fr);
+            gr.addColorStop(0, tom(A.fruta, 1.35)); gr.addColorStop(0.55, tom(A.fruta, 0.8 + it.luz * 0.3)); gr.addColorStop(1, tom(A.fruta, 0.6));
+            g.fillStyle = gr; g.beginPath();
+            if (A.manga) g.ellipse(sx, sy, fr * 0.78, fr * 1.15, 0.35, 0, TAU); else g.arc(sx, sy, fr, 0, TAU);
+            g.fill();
+            if (A.manga) { g.fillStyle = 'rgba(205,70,40,.4)'; g.beginPath(); g.ellipse(sx - fr * 0.25, sy - fr * 0.3, fr * 0.45, fr * 0.55, 0.35, 0, TAU); g.fill(); }
+            continue;
+          }
+          // folhinha: elipse pontuda na direção da folha; as do lado do sol ganham um brilho na metade de cima
+          const len = L * it.tam, wl = W * it.tam * 0.5, c = Math.cos(it.ang), sn = Math.sin(it.ang);
+          g.fillStyle = tomFolha(A.tons, it.luz);
+          g.beginPath(); g.moveTo(sx - c * len * 0.5, sy - sn * len * 0.5); g.quadraticCurveTo(sx - sn * wl * 1.6, sy + c * wl * 1.6, sx + c * len * 0.5, sy + sn * len * 0.5); g.quadraticCurveTo(sx + sn * wl * 1.6, sy - c * wl * 1.6, sx - c * len * 0.5, sy - sn * len * 0.5); g.fill();
+          if (it.luz > 0.8) { g.fillStyle = tomFolha([A.tons[2], A.tons[3], A.tons[3]], (it.luz - 0.8) * (A.brilho ? 5 : 3.5)); g.beginPath(); g.ellipse(sx - sn * wl * 0.3, sy + c * wl * 0.3 - 0.3, len * 0.28, wl * 0.45, it.ang, 0, TAU); g.fill(); }
+        }
+        if (!galhos) desenhaGalhos();
       } };
     }
     function cesto(x, base) {

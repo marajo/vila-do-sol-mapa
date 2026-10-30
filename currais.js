@@ -38,8 +38,11 @@
       { id: 'horta', cerca: 'estacas', piso: 'horta' },
       { id: 'pomar', cerca: 'ripas', piso: 'pomar' },
     ];
+    // pomar por nível: a porteira fica sempre no mesmo lugar (fim da trilha, x 620, y 1000) e o pomar cresce em volta
+    const POMAR = { 1: { x: 440, y: 600, w: 360, h: 400 }, 2: { x: 180, y: 380, w: 800, h: 620 }, 3: { x: 80, y: 80, w: 1380, h: 920 } };
+    let nivelPomarAtual = 1, qAtual = 0;
     const currais = CONF.map((c, i) => {
-      const l = L.lotes.find(x => x.id === c.id), est = L.estradas.find(e => e.lote === c.id), [gx, gy] = est.linha[est.linha.length - 1];
+      const l = c.id === 'pomar' ? { id: 'pomar', ...POMAR[nivelPomarAtual] } : L.lotes.find(x => x.id === c.id), est = L.estradas.find(e => e.lote === c.id), [gx, gy] = est.linha[est.linha.length - 1];
       const dist = { oeste: Math.abs(gx - l.x), leste: Math.abs(gx - l.x - l.w), norte: Math.abs(gy - l.y), sul: Math.abs(gy - l.y - l.h) };
       const lado = Object.keys(dist).reduce((a, b) => (dist[a] < dist[b] ? a : b));
       const vertical = lado === 'oeste' || lado === 'leste';
@@ -186,6 +189,18 @@
       } };
     }
 
+    /** árvores do pomar em grade fixa no mapa (cada lugar tem sempre a mesma árvore), com uma alameda livre na porteira */
+    const ESPECIES = ['laranja', 'maca', 'manga', 'limao'];
+    function montarPomar(cur) {
+      const l = cur.l, o = (cur.objetos = []), meio = cur.porteira.pos, cols = [];
+      for (let x = meio - 100; x >= l.x + 70; x -= 180) cols.push(x);
+      for (let x = meio + 100; x <= l.x + l.w - 60; x += 180) cols.push(x);
+      cols.sort((a, b) => a - b);
+      for (let base = l.y + l.h - 120, j = 0; base >= l.y + 60; base -= 200, j++)
+        for (const x of cols) o.push(P.arvore(x, base, ESPECIES[(Math.round((x - meio + 1000) / 180) + j) % 4]));
+      o.push(P.cesto(meio + 70, l.y + l.h - 15), P.caixote(meio - 60, l.y + l.h - 25, '#f39c1f'));
+      if (l.h > 400) { o.push(P.caixote(meio + 60, l.y + l.h - 230, '#c8312a')); o.push(P.escada(meio + 145, l.y + l.h - 316)); } // escada encostada na árvore à direita da alameda
+    }
     // ---------- arrumação de cada curral (posições relativas ao lote) ----------
     const P = raiz.Plantas.criar(U);
     for (const cur of currais) {
@@ -210,13 +225,8 @@
         for (const [b, culturas] of linhas) cols.forEach(([a, c], i) => o.push(P.canteiro(l.x + a, l.x + c, l.y + b, culturas[i])));
         o.push(P.espantalho(l.x + 600, l.y + 240));
         o.push(P.regador(l.x + 60, l.y + 246));
-      } else if (cur.id === 'pomar') { // três fileiras de três árvores; o corredor da porteira fica livre
-        const especies = [['laranja', 'maca', 'manga'], ['manga', 'laranja', 'limao'], ['maca', 'manga', 'laranja']];
-        [190, 380, 570].forEach((b, j) => [110, 300, 600].forEach((a, i) => o.push(P.arvore(l.x + a, l.y + b, especies[j][i]))));
-        o.push(P.cesto(l.x + 520, l.y + 600));
-        o.push(P.escada(l.x + 345, l.y + 384)); // encostada na laranjeira do meio
-        o.push(P.caixote(l.x + 200, l.y + 470, '#f39c1f'), P.caixote(l.x + 470, l.y + 470, '#c8312a'));
-      } else {
+      } else if (cur.id === 'pomar') montarPomar(cur);
+      else {
         o.push(casinha(l.x + 120, l.y + 176, { w: 150, d: 82, H: 50, h1: 32, madeira: '#e7dfcf', friso: '#9b3022', portaL: 26, portaA: 32, elevada: 24, ninhos: true }));
         o.push(comedouroTubo(l.x + 330, l.y + 214));
         o.push(bebedouroGalinha(l.x + 420, l.y + 160));
@@ -225,8 +235,10 @@
     const objetos = currais.flatMap(c => c.objetos);
 
     // ---------- cercas: um pedaço por vão, para entrar na ordem de profundidade ----------
-    for (const cur of currais) {
+    for (const cur of currais) montarCerca(cur);
+    function montarCerca(cur) {
       const { l } = cur, E = CERCAS[cur.cerca];
+      cur.pecas = [];
       const lados = [['norte', l.x, l.y, l.x + l.w, l.y], ['sul', l.x, l.y + l.h, l.x + l.w, l.y + l.h], ['oeste', l.x, l.y, l.x, l.y + l.h], ['leste', l.x + l.w, l.y, l.x + l.w, l.y + l.h]];
       for (const [nome, ax, ay, bx, by] of lados) {
         const horiz = ay === by, comp = horiz ? bx - ax : by - ay;
@@ -456,14 +468,15 @@
     const bloqueia = (x, y) => currais.some(cur => dentro(cur, x, y, 14));
 
     // ---------- desenho: equipamentos assados, cercas vetoriais ----------
-    function assar(q) {
-      for (const o of objetos) {
+    function assar(q, so) {
+      qAtual = q;
+      for (const o of so ? so.objetos : objetos) {
         const [x0, y0, x1, y1] = o.caixa, c = document.createElement('canvas');
         c.width = Math.ceil((x1 - x0) * q); c.height = Math.ceil((y1 - y0) * q);
         const g = c.getContext('2d'); g.setTransform(q, 0, 0, q, -x0 * q, -y0 * q); g.lineCap = 'butt'; g.lineJoin = 'round';
         o.pintar(g, sorteio(Math.round(o.caixa[0] * 3 + o.caixa[1]))); o.cv = c;
       }
-      for (const cur of currais) for (const p of cur.pecas) { // vãos de cerca: também prontos em imagem (só a folha da porteira se mexe)
+      for (const cur of so ? [so] : currais) for (const p of cur.pecas) { // vãos de cerca: também prontos em imagem (só a folha da porteira se mexe)
         const E = CERCAS[cur.cerca], m = E.poste * 1.5 + 6;
         p.caixa = [Math.min(p.a[0], p.b[0]) - m, Math.min(p.a[1], p.b[1]) - E.alt - 16, Math.max(p.a[0], p.b[0]) + m, Math.max(p.a[1], p.b[1]) + 6];
         const [x0, y0, x1, y1] = p.caixa, c = document.createElement('canvas');
@@ -478,9 +491,11 @@
       for (const o of objetos) {
         const [a, b, c] = o.caixa;
         if (c < x0 || a > x1 || o.base < y0 || b > y1) continue;
-        if (o.balanca) { // árvore: a copa balança a partir do pé (o tronco fica parado no chão)
+        if (o.balanca) { // árvore: a copa balança a partir do pé (o tronco fica parado no chão); muda nova cresce até o tamanho todo
           const k = Math.sin(agora * 1.1 + o.caixa[0] * 0.013) * 0.022 + Math.sin(agora * 2.3 + o.base * 0.02) * 0.006;
-          out.push({ y: o.base, desenhar: () => { ctx.save(); ctx.transform(1, 0, k, 1, -k * o.base, 0); ctx.drawImage(o.cv, o.caixa[0], o.caixa[1], o.caixa[2] - o.caixa[0], o.caixa[3] - o.caixa[1]); ctx.restore(); } });
+          const t = o.nasce ? Math.min(1, Math.max(0, (agora - o.nasce) / 2.6)) : 1, s = 0.1 + 0.9 * (1 - (1 - t) ** 3), cx = (o.pegada[0] + o.pegada[2]) / 2;
+          if (t >= 1) o.nasce = 0;
+          out.push({ y: o.base, desenhar: () => { ctx.save(); ctx.transform(1, 0, k, 1, -k * o.base, 0); if (s < 1) { ctx.translate(cx, o.base); ctx.scale(s, s); ctx.translate(-cx, -o.base); } ctx.drawImage(o.cv, o.caixa[0], o.caixa[1], o.caixa[2] - o.caixa[0], o.caixa[3] - o.caixa[1]); ctx.restore(); } });
           continue;
         }
         out.push({ y: o.base, desenhar: () => ctx.drawImage(o.cv, o.caixa[0], o.caixa[1], o.caixa[2] - o.caixa[0], o.caixa[3] - o.caixa[1]) });
@@ -518,7 +533,19 @@
       }
       return melhor;
     }
-    return { currais, CERCAS, objetoEm, capim, aparado, bloqueia, pintarChao, assar, extras, mini, dentro, perto, portao, atualizar, pontosPorteira, andavelDentro };
+    /** muda o tamanho do pomar: devolve [lote antes, lote depois]; árvores novas nascem como mudas no instante "agora" */
+    function nivelPomar(n, agora = 0) {
+      const cur = currais.find(c => c.id === 'pomar');
+      if (n === undefined) return nivelPomarAtual;
+      const antes = { ...cur.l }, tinha = new Set(cur.objetos.filter(o => o.tipo === 'arvore').map(o => o.pegada[0] + ',' + o.base));
+      nivelPomarAtual = n; Object.assign(cur.l, POMAR[n]);
+      montarPomar(cur); montarCerca(cur); cur.portao.ang = cur.portao.alvo = 0;
+      for (const o of cur.objetos) if (o.tipo === 'arvore' && !tinha.has(o.pegada[0] + ',' + o.base)) o.nasce = agora;
+      objetos.length = 0; for (const c of currais) objetos.push(...c.objetos);
+      if (qAtual) assar(qAtual, cur);
+      return [antes, { ...cur.l }];
+    }
+    return { currais, CERCAS, POMAR, nivelPomar, objetoEm, capim, aparado, bloqueia, pintarChao, assar, extras, mini, dentro, perto, portao, atualizar, pontosPorteira, andavelDentro };
   }
 
   raiz.Currais = { criar };
