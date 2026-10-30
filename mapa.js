@@ -1,5 +1,5 @@
 // Protótipo do mapa novo da Vila do Sol: chão, rio com correnteza, ponte rural, estradas de terra, capim realista,
-// câmera com zoom, mapa pequeno e um agricultor para ver o capim deitar.
+// câmera com zoom, mapa pequeno, construções, currais, horta, pomar, animais e a equipe trabalhando.
 (function () {
   'use strict';
   const L = MapaLayout, { W, H, rio, ponte: P, estradas, noPatio, patio, lotes, estrada, naPonte } = L;
@@ -445,11 +445,6 @@
     }
   }
 
-  // ---------- agricultor ----------
-  const folha = new Image(); let folhaOk = false;
-  folha.onload = () => (folhaOk = true);
-  folha.src = '../assets/pixellab-staff/farmer/sheet.png?v=46';
-  const agricultor = { x: 2960, y: 870, caminho: [], dist: 0, dir: 0, rastro: 0 };
   // grade de caminhar de 16 px: anda em terra e na ponte, prefere estradas; não entra nas construções
   const GC = 16, GX = Math.ceil(W / GC), GY = Math.ceil(H / GC), custo = new Float32Array(GX * GY);
   function recalcularCusto(x0 = 0, y0 = 0, x1 = W, y1 = H) {
@@ -522,30 +517,9 @@
     return pts;
   }
   const casaDaEquipe = () => { const e = predios.find(p => p.id === 'casa').e; return [e.porta[0], e.porta[1] + 20]; };
-  const equipe = Trabalhadores.criar({ C, bichos, rota, gradeFora: () => custo, gradeDentro: () => custoDentro, livre: pontoLivre, casa: casaDaEquipe, grama,
+  const equipe = Trabalhadores.criar({ C, bichos, rota, gradeFora: () => custo, gradeDentro: () => custoDentro, livre: pontoLivre, casa: casaDaEquipe, grama, agora: () => ultimo / 1000,
     imagem: pasta => { const i = new Image(); i.src = `../assets/pixellab-staff/${pasta}/sheet.png?v=46`; return i; } });
-  function andar(dt, agora) {
-    const a = agricultor;
-    let resta = 66 * dt;
-    while (resta > 0 && a.caminho.length) {
-      const [tx, ty] = a.caminho[0], dx = tx - a.x, dy = ty - a.y, d = Math.hypot(dx, dy);
-      if (d < 0.5) { a.caminho.shift(); continue; }
-      const s = Math.min(d, resta);
-      a.x += (dx / d) * s; a.y += (dy / d) * s; resta -= s; a.dist += s; a.rastro += s;
-      a.dir = Math.round(((Math.atan2(dx, dy) + Math.PI * 2) % (Math.PI * 2)) / (Math.PI / 4)) % 8;
-      if (a.rastro > 5) { a.rastro = 0; grama.pisar(a.x, a.y + 3, dx, dy, agora); }
-    }
-  }
-  const extraAgricultor = {
-    get y() { return naPonte(agricultor.x, agricultor.y) ? agricultor.y + 0.01 : agricultor.y; },
-    desenhar() {
-      const a = agricultor;
-      ctx.fillStyle = 'rgba(20,30,10,.35)'; ctx.beginPath(); ctx.ellipse(a.x, a.y, 12, 4, 0, 0, 7); ctx.fill();
-      if (!folhaOk) { ctx.fillStyle = '#b77e3b'; ctx.fillRect(a.x - 7, a.y - 46, 14, 40); return; }
-      const andando = a.caminho.length > 0, col = andando ? Math.floor(a.dist / 36 * 8) % 8 : a.dir, lin = andando ? a.dir : 8;
-      ctx.drawImage(folha, col * 92, lin * 92, 92, 92, a.x - 42, a.y - 76, 84, 84);
-    },
-  };
+  const agricultor = equipe.agricultor; // o agricultor da equipe: cuida da horta e atende o clique no chão
 
   // ---------- tela, câmera e controles ----------
   const tela = document.getElementById('tela'), ctx = tela.getContext('2d');
@@ -604,12 +578,14 @@
       const wx = cam.x + e.clientX / cam.zoom, wy = cam.y + e.clientY / cam.zoom, pr = predioEm(wx, wy), bi = bichos.bichoEm(wx, wy), tb = equipe.em(wx, wy);
       const ob = !tb && !bi ? C.objetoEm(wx, wy) : null;
       if (tb) avisar(equipe.descricao(tb));
-      else if (ob) avisar(ob.rotulo);
+      else if (ob) avisar(ob.rotuloAgora ? ob.rotuloAgora(ultimo / 1000) : ob.rotulo);
       else if (bi) { bichos.chamar(bi, agricultor.x); avisar(bichos.rotulo(bi)); }
       else if (pr) { if (pr.nivel < 3) mudarNivel(pr, pr.nivel + 1); else avisar(`${pr.nome} já está no nível máximo (3)`); }
       else {
-        const c = rota(agricultor.x, agricultor.y, wx, wy);
-        if (c) { agricultor.caminho = c; avisar(''); } else avisar('Ali não dá para andar.');
+        const [ax, ay] = agricultor.visivel ? [agricultor.x, agricultor.y] : casaDaEquipe();
+        if (!rota(ax, ay, wx, wy)) avisar('Ali não dá para andar.');
+        else if (!equipe.mandar(agricultor, wx, wy)) avisar('O agricultor está trabalhando na horta; chame de novo quando ele sair');
+        else avisar('');
       }
     }
     if (dedos.size === 1) { const [d] = [...dedos.values()]; gesto = { tipo: 'arrasto', x0: d.x, y0: d.y, cx: cam.x, cy: cam.y, moveu: true }; }
@@ -622,7 +598,7 @@
   bLotes.onclick = () => { mostrarLotes = !mostrarLotes; bLotes.setAttribute('aria-pressed', mostrarLotes); bLotes.textContent = mostrarLotes ? 'Esconder lotes' : 'Mostrar lotes'; };
   bVento.onclick = () => { grama.vento = !grama.vento; bVento.setAttribute('aria-pressed', grama.vento); };
   bLonge.onclick = () => { const longe = cam.zoom > zMin + 0.01; ajustarZoom(longe ? zMin : 1, cssW / 2, cssH / 2); bLonge.setAttribute('aria-pressed', longe); };
-  document.getElementById('bAgricultor').onclick = () => centrar(agricultor.x, agricultor.y - 30);
+  document.getElementById('bAgricultor').onclick = () => { if (agricultor.visivel) centrar(agricultor.x, agricultor.y - 30); else { const [x, y] = casaDaEquipe(); centrar(x, y - 60); avisar('O agricultor está descansando em casa'); } };
   document.getElementById('bEquipe').onclick = () => { equipe.chamar(); avisar('A equipe está saindo de casa para cuidar dos animais'); };
   let aviso = '', avisoAte = 0;
   function avisar(t) { aviso = t; avisoAte = performance.now() + 2500; }
@@ -659,8 +635,7 @@
     mctx.setTransform(1, 0, 0, 1, 0, 0); mctx.drawImage(miniBase, 0, 0);
     const sx = mini.width / W, sy = mini.height / H;
     mctx.strokeStyle = '#ffffff'; mctx.lineWidth = 1.5 * dpr; mctx.strokeRect(cam.x * sx, cam.y * sy, cam.largura * sx, cam.altura * sy);
-    mctx.fillStyle = '#ffd35a'; mctx.beginPath(); mctx.arc(agricultor.x * sx, agricultor.y * sy, 3 * dpr, 0, 7); mctx.fill();
-    mctx.fillStyle = '#7fd0ff'; for (const t of equipe.equipe) if (t.visivel) { mctx.beginPath(); mctx.arc(t.x * sx, t.y * sy, 2.4 * dpr, 0, 7); mctx.fill(); }
+    for (const t of equipe.equipe) if (t.visivel) { mctx.fillStyle = t === agricultor ? '#ffd35a' : '#7fd0ff'; mctx.beginPath(); mctx.arc(t.x * sx, t.y * sy, (t === agricultor ? 3 : 2.4) * dpr, 0, 7); mctx.fill(); }
   }
   let miniArrasto = false;
   const miniIr = e => { const r = mini.getBoundingClientRect(); centrar(((e.clientX - r.left) / r.width) * W, ((e.clientY - r.top) / r.height) * H); };
@@ -762,7 +737,7 @@
     grama.refazer(x0, y0, x1, y1);
     for (const [k, lad] of ladrilhos) if (lad.tx * T < x1 && lad.tx * T + T > x0 && lad.ty * T < y1 && lad.ty * T + T > y0) ladrilhos.delete(k);
     recalcularCusto(x0, y0, x1, y1); montarCustoDentro();
-    if (noPredio(agricultor.x, agricultor.y) < 8) { agricultor.x = p.e.porta[0] + 40; agricultor.y = p.e.porta[1] + 20; agricultor.caminho = []; }
+    for (const t of equipe.equipe) if (t.visivel && noPredio(t.x, t.y) < 8) { t.x = p.e.porta[0] + 40; t.y = p.e.porta[1] + 20; t.caminho = null; }
     for (let i = 0; i < 70; i++) {
       const x = b[0] + Math.random() * (b[2] - b[0]);
       poeira.push({ x, y: p.e.base - Math.random() * 20, vx: (x - (b[0] + b[2]) / 2) * 0.25 + (Math.random() - 0.5) * 30, vy: -14 - Math.random() * 26, vida: -Math.random() * 0.5, dura: 1.4 + Math.random() * 1.2, r: 9 + Math.random() * 14 });
@@ -782,7 +757,7 @@
     grama.refazer(x0, y0, x1, y1);
     for (const [k, lad] of ladrilhos) if (lad.tx * T < x1 && lad.tx * T + T > x0 && lad.ty * T < y1 && lad.ty * T + T > y0) ladrilhos.delete(k);
     recalcularCusto(x0, y0, x1, y1); montarCustoDentro();
-    if (C.bloqueia(agricultor.x, agricultor.y)) { const f = C.pontosPorteira(cur).fora; agricultor.x = f[0]; agricultor.y = f[1]; agricultor.caminho = []; }
+    for (const t of equipe.equipe) if (t.visivel && t.cur !== cur && C.bloqueia(t.x, t.y)) { const f = C.pontosPorteira(cur).fora; t.x = f[0]; t.y = f[1]; t.caminho = null; }
     pintarMini(); atualizarBotoes();
     const qtd = bichos.bichos.filter(x => x.cur === cur && x.ativo).length, itens = cur.objetos.filter(o => o.tipo === 'arvore' || o.tipo === 'canteiro').length;
     const conta = qtd ? `${qtd} animais` : id === 'horta' ? `${itens} canteiros` : `${itens} árvores`;
@@ -822,7 +797,6 @@
       if (qCurrais !== qp) { C.assar(qp); qCurrais = qp; }
     }
     grama.orcamentoMs = !pronto ? 120 : predios.some(p => p.anim) ? 26 : 9; // na obra, o gramado em volta se refaz debaixo da poeira
-    andar(dt, agora);
     C.atualizar(dt);
     equipe.atualizar(dt, agora);
     bichos.atualizar(dt, agora, grama, equipe.gente());
@@ -844,7 +818,7 @@
       }
     if (quadros % 90 === 0) for (const [k, lad] of ladrilhos) if (quadros - lad.visto > 300) ladrilhos.delete(k);
     desenharAgua(cam, agora, dt);
-    const faltaCapim = grama.quadro(ctx, cam, agora, [...extraPonte, ...extrasPredios, ...C.extras(ctx, cam, agora), ...bichos.extras(ctx, cam, agora), ...equipe.extras(ctx, cam, agora), extraAgricultor]);
+    const faltaCapim = grama.quadro(ctx, cam, agora, [...extraPonte, ...extrasPredios, ...C.extras(ctx, cam, agora), ...bichos.extras(ctx, cam, agora), ...equipe.extras(ctx, cam, agora)]);
     ctx.setTransform(S, 0, 0, S, -cam.x * S, -cam.y * S);
     sombras();
     particulas(dt, agora);

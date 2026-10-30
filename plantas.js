@@ -88,9 +88,20 @@
     };
 
     /** canteiro elevado: moldura de tábuas, terra com sulcos, a cultura em fileiras (as de trás primeiro) */
-    function canteiro(x0, x1, base, tipo) {
-      const C = CULTURAS[tipo], dd = 46, hh = 9, yT = base - hh;
-      return { tipo: 'canteiro', base, cultura: tipo, rotulo: `Canteiro de ${C.nome.toLowerCase()}`, pegada: [x0, base - dd, x1, base], caixa: [x0 - 18, yT - dd - C.alto - 14, x1 + 18, base + 8], pintar(g, r) {
+    // tempo (s) do plantio até a colheita, em ritmo de jogo
+    const CICLO = { cenoura: 40, alface: 35, couve: 45, morango: 70, milho: 60, girassol: 80, tomate: 65, abobora: 70 };
+    const ESTAGIOS = ['terra preparada', 'brotando', 'crescendo', 'pronto para colher'];
+    /** canteiro elevado com a cultura num estágio: 0 terra preparada, 1 brotos, 2 crescendo, 3 pronto para colher */
+    function canteiro(x0, x1, base, tipo, agora = 0, sorte = Math.random()) {
+      const C = CULTURAS[tipo], dd = 46, hh = 9, yT = base - hh, dur = CICLO[tipo];
+      // começa variado: uns prontos, uns vazios, outros no meio do caminho (o agricultor tem o que fazer)
+      const plantado = sorte < 0.3 ? agora - dur * 1.3 : sorte < 0.5 ? null : agora - dur * (sorte - 0.5) * 1.6;
+      return { tipo: 'canteiro', base, cultura: tipo, nomeCultura: C.nome, plantado, dur, estagios: true,
+        rotulo: `Canteiro de ${C.nome.toLowerCase()}`,
+        progresso(t) { return this.plantado == null ? 0 : Math.min(1, (t - this.plantado) / this.dur); },
+        estagio(t) { if (this.plantado == null) return 0; const p = this.progresso(t); return p < 0.25 ? 1 : p < 0.7 ? 2 : 3; },
+        rotuloAgora(t) { const e = this.estagio(t); return `Canteiro de ${C.nome.toLowerCase()} · ${e === 2 ? `crescendo (${Math.round(this.progresso(t) * 100)}%)` : ESTAGIOS[e]}`; },
+        pegada: [x0, base - dd, x1, base], caixa: [x0 - 18, yT - dd - C.alto - 14, x1 + 18, base + 8], pintar(g, r, estagio = 3) {
         g.fillStyle = 'rgba(30,24,10,.35)'; g.fillRect(x0 + 2, base - 2, x1 - x0, 6);
         // terra fofa com sulcos (vista de cima)
         g.fillStyle = degradeV(g, yT - dd, yT, [[0, '#4a3524'], [1, '#5e4430']]); g.fillRect(x0 + 3, yT - dd + 3, x1 - x0 - 6, dd - 4);
@@ -103,7 +114,14 @@
         g.fillStyle = tom(borda, 1.15); g.fillRect(x0, yT - dd, x1 - x0, 3.5); g.fillRect(x0, yT - dd, 3.5, dd); g.fillRect(x1 - 3.5, yT - dd, 3.5, dd);
         // plantas (de trás para a frente)
         const n = Math.max(1, Math.round(C.por * 1.6)); // pés por fileira
-        for (const ly of lin) for (let i = 0; i < n; i++) C.pintar(g, x0 + 12 + (i + 0.5) * ((x1 - x0 - 24) / n) + (r() - 0.5) * 3, ly + 1, r);
+        for (const ly of lin) for (let i = 0; i < n; i++) {
+          const px = x0 + 12 + (i + 0.5) * ((x1 - x0 - 24) / n) + (r() - 0.5) * 3, py = ly + 1;
+          if (estagio === 1) { // broto: duas folhinhas (cotilédones) saindo da terra
+            g.strokeStyle = '#6f9a3a'; g.lineWidth = 1; g.beginPath(); g.moveTo(px, py); g.lineTo(px, py - 4); g.stroke();
+            folha(g, px - 2, py - 4.5, 2.3, 1.2, -0.4, '#7fb84a'); folha(g, px + 2, py - 4.5, 2.3, 1.2, 0.4, '#8cc455');
+          } else if (estagio === 2) { g.save(); g.translate(px, py); g.scale(0.55, 0.55); g.translate(-px, -py); C.pintar(g, px, py, r); g.restore(); } // metade do tamanho
+          else if (estagio === 3) C.pintar(g, px, py, r);
+        }
         // frente da moldura (tábua), na frente das plantas baixas
         g.fillStyle = degradeV(g, yT, base, [[0, tom(borda, 1.05)], [1, tom(borda, 0.72)]]); g.fillRect(x0, yT, x1 - x0, hh);
         g.fillStyle = 'rgba(0,0,0,.25)'; g.fillRect(x0, yT, x1 - x0, 1);

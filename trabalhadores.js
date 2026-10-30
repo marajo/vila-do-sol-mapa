@@ -1,11 +1,13 @@
-// Equipe do mapa novo (os mesmos personagens do jogo, folhas Pixel Lab): Tomé cuida das vacas, Lia das ovelhas,
-// Bento dos porcos e Clara das galinhas. Cada um sai de casa, vai pela estrada até a porteira do seu curral,
+// Equipe do mapa novo (os mesmos personagens do jogo, folhas Pixel Lab): o agricultor cuida da horta (colhe o que
+// está pronto, planta de novo e rega o que está crescendo), Tomé cuida das vacas, Lia das ovelhas, Bento dos porcos
+// e Clara das galinhas. O agricultor também atende o clique no chão e depois volta à rotina. Cada um sai de casa, vai pela estrada até a porteira do seu curral,
 // abre, entra, fecha, cuida (cocho, água, ordenha, tosquia, ovos), abre, sai, fecha e volta para casa. Depois de um
 // descanso, faz tudo de novo. Os animais abrem caminho e vêm comer quando o cocho é servido.
 (function (raiz) {
   'use strict';
   const DIRS = 8, C_CEL = 92, VEL = 58, PASSO = 36;
   const EQUIPE = [
+    { nome: 'Agricultor', pasta: 'farmer', curral: 'horta', atraso: 0.5 },
     { nome: 'Tomé', pasta: 'tome', curral: 'vacas', atraso: 2 },
     { nome: 'Lia', pasta: 'lia', curral: 'ovelhas', atraso: 6 },
     { nome: 'Bento', pasta: 'bento', curral: 'porcos', atraso: 10 },
@@ -16,14 +18,31 @@
 
   /**
    * o: { C (currais), bichos, rota(ax, ay, bx, by, grade), gradeFora(), gradeDentro(), livre(grade, x, y) → [x, y],
-   *      casa() → [x, y] (porta de casa), grama, imagem(pasta) → Image }
+   *      casa() → [x, y] (porta de casa), grama, imagem(pasta) → Image, agora() → relógio do jogo em s }
    */
   function criar(o) {
     const { C, bichos } = o;
     const equipe = EQUIPE.map(p => ({ ...p, cur: C.currais.find(c => c.id === p.curral), img: o.imagem(p.pasta), x: 0, y: 0, visivel: false, alfa: 0,
       passos: [], atual: null, espera: p.atraso, dist: 0, dir: 0, pose: 'parado', tTarefa: 0, texto: '', rastro: 0, caminho: null }));
 
-    function tarefas(t) {
+    /** horta: colhe e replanta o que está pronto, planta onde está vazio e rega um pouco do que está crescendo */
+    function tarefasHorta(t, agora) {
+      const canteiros = t.cur.objetos.filter(x => x.tipo === 'canteiro'), lista = [];
+      const frente = c => [(c.pegada[0] + c.pegada[2]) / 2 + (Math.random() - 0.5) * 40, c.pegada[3] + 14];
+      const nome = c => c.nomeCultura.toLowerCase();
+      let regas = 0;
+      for (const c of canteiros) {
+        const e = c.estagio(agora);
+        if (e === 3) lista.push({ ponto: frente(c), dur: 4, texto: `Colhendo ${nome(c)}`, depois: () => { c.plantado = null; } },
+          { ponto: frente(c), dur: 3.5, texto: `Plantando ${nome(c)}`, depois: () => { c.plantado = o.agora(); } });
+        else if (e === 0) lista.push({ ponto: frente(c), dur: 3.5, texto: `Plantando ${nome(c)}`, depois: () => { c.plantado = o.agora(); } });
+        else if (regas < 2 && Math.random() < 0.5) { regas++; lista.push({ ponto: frente(c), dur: 3, texto: `Regando ${nome(c)}`, depois: () => { c.plantado -= c.dur * 0.08; } }); } // a rega adianta um pouco
+      }
+      if (!lista.length && canteiros.length) { const c = canteiros[Math.floor(Math.random() * canteiros.length)]; lista.push({ ponto: frente(c), dur: 3, texto: `Regando ${nome(c)}` }); }
+      return lista.slice(0, 8);
+    }
+    function tarefas(t, agora) {
+      if (t.cur.id === 'horta') return tarefasHorta(t, agora);
       const cur = t.cur, objs = cur.objetos, frente = obj => [(obj.pegada[0] + obj.pegada[2]) / 2, obj.pegada[3] + 24];
       const cocho = objs.find(x => x.tipo === 'cocho' || x.tipo === 'comedouro'), agua = objs.find(x => x.tipo === 'bebedouro');
       const lista = [];
@@ -42,8 +61,7 @@
     function roteiro(t) {
       const pp = C.pontosPorteira(t.cur), casa = o.casa();
       const passos = [{ tipo: 'surgir' }, { tipo: 'andar', ate: pp.fora, grade: 'fora' }, { tipo: 'portao', abrir: true, olhar: pp.meio },
-        { tipo: 'andar', ate: pp.dentro, direto: true }, { tipo: 'portao', abrir: false, olhar: pp.meio }];
-      for (const tf of tarefas(t)) passos.push({ tipo: 'andar', ate: tf.ponto, bicho: tf.bicho, grade: 'dentro' }, { tipo: 'tarefa', ...tf });
+        { tipo: 'andar', ate: pp.dentro, direto: true }, { tipo: 'portao', abrir: false, olhar: pp.meio }, { tipo: 'planejar' }];
       passos.push({ tipo: 'andar', ate: pp.dentro, grade: 'dentro' }, { tipo: 'portao', abrir: true, olhar: pp.meio }, { tipo: 'andar', ate: pp.fora, direto: true },
         { tipo: 'portao', abrir: false, olhar: pp.meio }, { tipo: 'andar', ate: casa, grade: 'fora' }, { tipo: 'sumir' });
       return passos;
@@ -55,9 +73,16 @@
         if (!t.atual) {
           if (t.passos.length) t.atual = t.passos.shift();
           else if (!t.visivel) { t.espera -= dt; if (t.espera <= 0) { [t.x, t.y] = o.casa(); t.passos = roteiro(t); t.dir = 0; } continue; }
+          else if (t.voltar) { t.voltar = false; t.passos = roteiro(t).slice(1); continue; } // atendeu o chamado: volta para a rotina de onde está
           else continue;
         }
         const p = t.atual;
+        if (p.tipo === 'planejar') { // entrou: decide o que fazer agora
+          const novos = [];
+          for (const tf of tarefas(t, agora)) novos.push({ tipo: 'andar', ate: tf.ponto, bicho: tf.bicho, grade: 'dentro' }, { tipo: 'tarefa', ...tf });
+          t.passos.unshift(...novos); t.atual = null; continue;
+        }
+        if (p.tipo === 'esperar') { t.pose = 'parado'; p.t = (p.t || 0) + dt; if (p.t >= p.dur) t.atual = null; continue; }
         if (p.tipo === 'surgir') { t.visivel = true; t.pose = 'parado'; t.alfa = Math.min(1, t.alfa + dt * 2); if (t.alfa >= 1) t.atual = null; }
         else if (p.tipo === 'sumir') { t.pose = 'parado'; t.dir = 4; t.alfa = Math.max(0, t.alfa - dt * 2); if (t.alfa <= 0) { t.visivel = false; t.atual = null; t.espera = 35 + Math.random() * 20; } }
         else if (p.tipo === 'portao') {
@@ -133,12 +158,23 @@
     function em(x, y) { return equipe.find(t => t.visivel && Math.abs(x - t.x) < 18 && y < t.y + 4 && y > t.y - 64); }
     function descricao(t) {
       const p = t.atual;
-      const faz = t.texto || (p && p.tipo === 'portao' ? (p.abrir ? 'abrindo a porteira' : 'fechando a porteira') : C.dentro(t.cur, t.x, t.y, 4) ? 'cuidando dos animais' : t.passos.length > 6 ? `indo para o curral` : 'voltando para casa');
+      const horta = t.cur.id === 'horta';
+      const faz = t.texto || (p && p.tipo === 'portao' ? (p.abrir ? 'abrindo a porteira' : 'fechando a porteira') : t.voltar || (p && p.tipo === 'esperar') ? 'atendendo o seu chamado' : C.dentro(t.cur, t.x, t.y, 4) ? (horta ? 'cuidando da horta' : 'cuidando dos animais') : t.passos.length > 6 ? (horta ? 'indo para a horta' : 'indo para o curral') : 'voltando para casa');
       return `${t.nome} · ${faz}`;
+    }
+    /** manda alguém ir até um ponto (clique no chão); depois de alguns segundos ele volta para a rotina.
+     *  Não atende se estiver dentro do curral/horta (está no meio do trabalho). */
+    function mandar(t, x, y) {
+      if (t.visivel && C.dentro(t.cur, t.x, t.y, 6)) return false;
+      if (!t.visivel) { [t.x, t.y] = o.casa(); t.visivel = true; t.alfa = 1; }
+      if (t.atual && t.atual.tipo === 'tarefa' && t.atual.bichoAlvo) bichos.reservar(t.atual.bichoAlvo, false);
+      t.atual = null; t.caminho = null; t.texto = ''; t.voltar = true;
+      t.passos = [{ tipo: 'andar', ate: [x, y], grade: 'fora' }, { tipo: 'esperar', dur: 6 }];
+      return true;
     }
     /** chama todo mundo que está em casa (um de cada vez) */
     function chamar() { let k = 0; for (const t of equipe) if (!t.visivel && !t.passos.length) t.espera = 0.5 + 2.5 * k++; }
-    return { equipe, atualizar, gente, extras, rotulos, em, descricao, chamar };
+    return { equipe, agricultor: equipe[0], atualizar, gente, extras, rotulos, em, descricao, chamar, mandar };
   }
 
   raiz.Trabalhadores = { criar };

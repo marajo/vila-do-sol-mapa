@@ -212,6 +212,7 @@
     }
     // ---------- arrumação de cada curral por nível (posições relativas ao lote) ----------
     const P = raiz.Plantas.criar(U);
+    const agoraJogo = () => (typeof performance !== 'undefined' ? performance.now() / 1000 : 0);
     function montarObjetos(cur) {
       if (cur.id === 'pomar') return montarPomar(cur);
       const l = cur.l, o = (cur.objetos = []), n = cur.nivel, w = l.w, h = l.h;
@@ -232,11 +233,11 @@
       } else if (cur.id === 'horta') { // canteiros dos dois lados do caminho de terra que sai da porteira
         cur.caminhoY = cur.porteira.pos;
         const cols = [[40, 210], [240, 410], [440, 610]];
-        if (n === 1) { o.push(P.canteiro(l.x + 40, l.x + 300, l.y + 96, 'milho'), P.canteiro(l.x + 40, l.x + 300, l.y + 216, 'cenoura'), P.regador(l.x + 316, l.y + 146)); }
+        if (n === 1) { o.push(P.canteiro(l.x + 40, l.x + 300, l.y + 96, 'milho', agoraJogo()), P.canteiro(l.x + 40, l.x + 300, l.y + 216, 'cenoura', agoraJogo()), P.regador(l.x + 316, l.y + 146)); }
         else {
           const linhas = n === 2 ? [[96, ['milho', 'girassol', 'tomate']], [216, ['cenoura', 'morango', 'alface']]]
             : [[96, ['milho', 'girassol', 'tomate']], [178, ['abobora', 'couve', 'alface']], [316, ['cenoura', 'morango', 'alface']], [400, ['morango', 'cenoura', 'couve']]];
-          for (const [b, culturas] of linhas) cols.forEach(([a, c], i) => o.push(P.canteiro(l.x + a, l.x + c, l.y + b, culturas[i])));
+          for (const [b, culturas] of linhas) cols.forEach(([a, c], i) => o.push(P.canteiro(l.x + a, l.x + c, l.y + b, culturas[i], agoraJogo())));
           o.push(P.espantalho(l.x + 600, l.y + (n === 2 ? 146 : 240)), P.regador(l.x + 60, l.y + (n === 2 ? 148 : 246)));
         }
       } else { // galinheiro
@@ -373,7 +374,7 @@
     function andavelDentro(cur, x, y) {
       const l = cur.l;
       if (x < l.x + 16 || x > l.x + l.w - 16 || y < l.y + 22 || y > l.y + l.h - 10) return false;
-      return cur.objetos.every(o => perto(o, x, y) > 12);
+      return cur.objetos.every(o => perto(o, x, y) > (cur.id === 'horta' ? 5 : 12));
     }
 
     // ---------- chão de cada curral (pintado nos ladrilhos do mapa) ----------
@@ -483,13 +484,18 @@
     const bloqueia = (x, y) => currais.some(cur => dentro(cur, x, y, 14));
 
     // ---------- desenho: equipamentos assados, cercas vetoriais ----------
+    function assarUm(o, q, estagio) {
+      const [x0, y0, x1, y1] = o.caixa, c = document.createElement('canvas');
+      c.width = Math.ceil((x1 - x0) * q); c.height = Math.ceil((y1 - y0) * q);
+      const g = c.getContext('2d'); g.setTransform(q, 0, 0, q, -x0 * q, -y0 * q); g.lineCap = 'butt'; g.lineJoin = 'round';
+      o.pintar(g, sorteio(Math.round(o.caixa[0] * 3 + o.caixa[1])), estagio);
+      return c;
+    }
     function assar(q, so) {
       qAtual = q;
       for (const o of so ? so.objetos : objetos) {
-        const [x0, y0, x1, y1] = o.caixa, c = document.createElement('canvas');
-        c.width = Math.ceil((x1 - x0) * q); c.height = Math.ceil((y1 - y0) * q);
-        const g = c.getContext('2d'); g.setTransform(q, 0, 0, q, -x0 * q, -y0 * q); g.lineCap = 'butt'; g.lineJoin = 'round';
-        o.pintar(g, sorteio(Math.round(o.caixa[0] * 3 + o.caixa[1]))); o.cv = c;
+        if (o.estagios) { o.cvs = {}; continue; } // canteiro: uma imagem por estágio, feita quando aparecer
+        o.cv = assarUm(o, q);
       }
       for (const cur of so ? [so] : currais) for (const p of cur.pecas) { // vãos de cerca: também prontos em imagem (só a folha da porteira se mexe)
         const E = CERCAS[cur.cerca], m = E.poste * 1.5 + 6;
@@ -513,6 +519,7 @@
           out.push({ y: o.base, desenhar: () => { ctx.save(); ctx.transform(1, 0, k, 1, -k * o.base, 0); if (s < 1) { ctx.translate(cx, o.base); ctx.scale(s, s); ctx.translate(-cx, -o.base); } ctx.drawImage(o.cv, o.caixa[0], o.caixa[1], o.caixa[2] - o.caixa[0], o.caixa[3] - o.caixa[1]); ctx.restore(); } });
           continue;
         }
+        if (o.estagios) { const st = o.estagio(agora); if (!o.cvs) o.cvs = {}; const cv = o.cvs[st] || (o.cvs[st] = assarUm(o, qAtual || 2, st)); out.push({ y: o.base, desenhar: () => ctx.drawImage(cv, o.caixa[0], o.caixa[1], o.caixa[2] - o.caixa[0], o.caixa[3] - o.caixa[1]) }); continue; }
         out.push({ y: o.base, desenhar: () => ctx.drawImage(o.cv, o.caixa[0], o.caixa[1], o.caixa[2] - o.caixa[0], o.caixa[3] - o.caixa[1]) });
       }
       for (const cur of currais) {
