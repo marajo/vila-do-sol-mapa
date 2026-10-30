@@ -316,7 +316,7 @@
     // fachada de tábuas
     tabuas(g, cont, xL, xR, yW - H - h1 - (h2 || 0), yW, c.madeira, r, c.tabua);
     // porta grande de correr
-    const dw = Math.round(w * (c.paiol ? 0.34 : 0.42)), dh = Math.min(H * 0.8, c.paiol ? 74 : 92), dx = cx - dw / 2, dy = yW - dh;
+    const dw = c.portaL ?? Math.round(w * (c.paiol ? 0.34 : 0.42)), dh = c.portaA ?? Math.min(H * 0.8, c.paiol ? 74 : 92), dx = cx - dw / 2, dy = yW - dh;
     g.fillStyle = degradeV(g, dy, yW, [[0, '#1e1611'], [1, '#33261c']]); g.fillRect(dx, dy, dw, dh);
     if (!c.paiol) { // trilho da porta
       g.fillStyle = '#3a3532'; g.fillRect(dx - 12, dy - 9, dw + 34, 5);
@@ -348,7 +348,7 @@
       g.fillStyle = '#5a4330'; g.fillRect(cx - 3, vy - 4, 3, 12);
       g.strokeStyle = '#444'; g.lineWidth = 2; g.beginPath(); g.arc(cx, vy + 11, 4, 0, 7); g.stroke();
       g.strokeStyle = '#8a7a5a'; g.lineWidth = 1; g.beginPath(); g.moveTo(cx + 4, vy + 11); g.lineTo(cx + 4, ly + 10); g.stroke();
-    } else { // janelinha com grades
+    } else if (!c.semJanela) { // janelinha com grades
       const ly = yW - H - h1 * 0.55, lw = 26;
       g.fillStyle = '#1a130e'; g.fillRect(cx - lw / 2, ly, lw, 20);
       g.fillStyle = '#5d4128'; for (let i = 1; i < 4; i++) g.fillRect(cx - lw / 2 + (lw * i) / 4 - 1, ly, 2.5, 20);
@@ -368,7 +368,7 @@
     }
     // feno espalhado na frente
     g.strokeStyle = 'rgba(214,184,100,.85)'; g.lineWidth = 0.9;
-    for (let i = 0; i < 40; i++) { const sx = dx - 10 + r() * (dw + 20), sy = yW + 2 + r() * 12; g.beginPath(); g.moveTo(sx, sy); g.lineTo(sx + (r() - 0.5) * 10, sy + (r() - 0.5) * 3); g.stroke(); }
+    for (let i = 0; i < (c.semFeno ? 0 : 40); i++) { const sx = dx - 10 + r() * (dw + 20), sy = yW + 2 + r() * 12; g.beginPath(); g.moveTo(sx, sy); g.lineTo(sx + (r() - 0.5) * 10, sy + (r() - 0.5) * 3); g.stroke(); }
     return { cont, topo: Math.min(...linha.map(p => p[1])) - L };
   }
   /** puxado de uma água encostado no lado leste do celeiro, aberto na frente, com feno guardado */
@@ -525,5 +525,5 @@
     return { fumaca };
   }
 
-  raiz.Construcoes = { especCasa, especCeleiro, pintar };
+  raiz.Construcoes = { especCasa, especCeleiro, pintar, util: { sorteio, tom, caminho, degradeV, degradeH, chapa, tabuas, fardo, corpoCeleiro, telhado, beiral, bordasTelhado } };
 })(typeof self !== 'undefined' ? self : globalThis);

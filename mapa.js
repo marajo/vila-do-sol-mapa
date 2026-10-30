@@ -25,6 +25,8 @@
     { id: 'celeiro', nome: 'Celeiro', nivel: 1, espec: n => Construcoes.especCeleiro(n, loteDe('celeiro')) },
   ];
   for (const p of predios) p.e = p.espec(p.nivel);
+  // ---------- currais e animais ----------
+  const C = Currais.criar(L, Construcoes.util), bichos = Animais.criar(C);
   /** distância até a construção mais perto (negativa dentro) */
   function noPredio(x, y) {
     let m = 999;
@@ -49,9 +51,9 @@
     const m = rio.margem(x, y);
     if (m < 16 + nb * 16) return 0;                      // água e barranco de terra da beira
     if (naPonte(x, y, 12)) return 0;
-    const pr = noPredio(x, y);
-    if (pr < 10 + nb * 8 || naEntrada(x, y)) return 0;
-    let k = 1;
+    const pr = noPredio(x, y), kc = C.capim(x, y);
+    if (pr < 10 + nb * 8 || naEntrada(x, y) || kc <= 0) return 0;
+    let k = kc;
     if (m < 90) k = Math.min(k, 0.25 + 0.75 * (m - 16 - nb * 16) / (74 - nb * 16));
     const e = estrada.borda(x, y) + (ruido(x / 90, y / 90, 7) - 0.5) * 14;
     if (e < 28) {
@@ -70,7 +72,7 @@
   /** gramado aparado em volta da casa e do celeiro (bem baixo junto da parede, vai subindo até o pasto) */
   function aparado(x, y) {
     const pr = noPredio(x, y) + (ruido(x / 40, y / 40, 23) - 0.5) * 24;
-    return pr < 40 ? 0.18 : pr < 115 ? 0.18 + 0.82 * (pr - 40) / 75 : 1;
+    return (pr < 40 ? 0.18 : pr < 115 ? 0.18 + 0.82 * (pr - 40) / 75 : 1) * C.aparado(x, y);
   }
   function taboa(x, y) {
     const m = rio.margem(x, y);
@@ -260,6 +262,7 @@
     if (pPerto) { g.globalAlpha = 0.5; g.fillStyle = '#a5875f'; poligono(g, patio.contorno(-60)); g.fill(); g.globalAlpha = 1; }
     pontos(g, pedriscos, x0, y0, x1, y1, 0.8);
     for (const { e } of predios) chaoDoPredio(g, e, x0, y0, x1, y1);
+    C.pintarChao(g, x0, y0, x1, y1);
 
     // rio (só se passa por aqui)
     const ya = Math.max(-200, y0 - 320), yz = Math.min(H + 200, y1 + 320);
@@ -454,7 +457,7 @@
       for (let i = Math.max(0, Math.floor(x0 / GC)); i <= Math.min(GX - 1, Math.floor(x1 / GC)); i++) {
         const x = i * GC + GC / 2, y = j * GC + GC / 2;
         const ponte = naPonte(x, y, -8), seco = rio.margem(x, y) > 10;
-        custo[i + j * GX] = !(ponte || seco) || noPredio(x, y) < 6 || x < 20 || y < 30 || x > W - 20 || y > H - 10 ? 0
+        custo[i + j * GX] = !(ponte || seco) || noPredio(x, y) < 6 || C.bloqueia(x, y) || x < 20 || y < 30 || x > W - 20 || y > H - 10 ? 0
           : (ponte || estrada.borda(x, y) < 0 || noPatio(x, y) < 0 || naEntrada(x, y)) ? 0.55 : 1;
       }
   }
@@ -544,7 +547,7 @@
   medir();
   cam.zoom = Math.max(zMin, 1); limitar();
   ajustarZoom(Math.min(1, cssW / 1500), cssW / 2, cssH / 2);
-  centrar(3215, 560); // começa no terreiro, vendo a casa e o celeiro
+  centrar(3330, 860); // começa no terreiro: casa, celeiro, galinheiro e curral das vacas
 
   tela.addEventListener('wheel', e => { e.preventDefault(); ajustarZoom(cam.zoom * Math.exp(-e.deltaY * 0.0015), e.clientX, e.clientY); }, { passive: false });
   const dedos = new Map();
@@ -570,8 +573,9 @@
     if (!dedos.has(e.pointerId)) return;
     dedos.delete(e.pointerId); tela.classList.remove('arrastando');
     if (gesto && gesto.tipo === 'arrasto' && !gesto.moveu && e.type === 'pointerup') {
-      const wx = cam.x + e.clientX / cam.zoom, wy = cam.y + e.clientY / cam.zoom, pr = predioEm(wx, wy);
-      if (pr) { if (pr.nivel < 3) mudarNivel(pr, pr.nivel + 1); else avisar(`${pr.nome} já está no nível máximo (3)`); }
+      const wx = cam.x + e.clientX / cam.zoom, wy = cam.y + e.clientY / cam.zoom, pr = predioEm(wx, wy), bi = bichos.bichoEm(wx, wy);
+      if (bi) { bichos.chamar(bi, agricultor.x); avisar(bichos.rotulo(bi)); }
+      else if (pr) { if (pr.nivel < 3) mudarNivel(pr, pr.nivel + 1); else avisar(`${pr.nome} já está no nível máximo (3)`); }
       else {
         const c = rota(agricultor.x, agricultor.y, wx, wy);
         if (c) { agricultor.caminho = c; avisar(''); } else avisar('Ali não dá para andar.');
@@ -610,7 +614,8 @@
     g.fillStyle = '#3d5d4c'; faixaRio(g, -60, H + 60, (y, s) => rio.hwLado(y, s)); g.fill();
     g.fillStyle = '#6b5038'; g.fillRect(P.x0, P.y - P.meia, P.x1 - P.x0, P.meia * 2);
     g.setLineDash([60, 40]); g.lineWidth = 16; g.strokeStyle = 'rgba(255,248,220,.85)'; g.fillStyle = 'rgba(255,248,220,.12)';
-    const livres = lotes.filter(l => !predios.some(p => p.id === l.id));
+    const livres = lotes.filter(l => !predios.some(p => p.id === l.id) && !C.currais.some(c => c.id === l.id));
+    C.mini(g);
     for (const l of livres) { g.fillRect(l.x, l.y, l.w, l.h); g.strokeRect(l.x, l.y, l.w, l.h); }
     g.setLineDash([]);
     for (const { e } of predios) { const [x0, y0, x1, y1] = e.pegada; g.fillStyle = e.tipo === 'casa' ? '#b5562f' : '#9b3022'; g.fillRect(x0, y0, x1 - x0, y1 - y0); }
@@ -657,6 +662,8 @@
     p.fumaca = Construcoes.pintar(g, p.e).fumaca; p.cv = c; p.cq = q;
   }
   for (const p of predios) assar(p, qPredio());
+  let qCurrais = qPredio();
+  C.assar(qCurrais);
   const fumaca = [], poeira = [];
   const voltaSuave = t => { const c = 1.9; return 1 + (c + 1) * (t - 1) ** 3 + c * (t - 1) ** 2; }; // passa um pouco e assenta
   function desenharPredio(p, agora) {
@@ -759,9 +766,11 @@
       grama.q = qualidade();
       const qp = qPredio();
       for (const p of predios) if (p.cq !== qp && !p.anim) assar(p, qp);
+      if (qCurrais !== qp) { C.assar(qp); qCurrais = qp; }
     }
     grama.orcamentoMs = !pronto ? 120 : predios.some(p => p.anim) ? 26 : 9; // na obra, o gramado em volta se refaz debaixo da poeira
     andar(dt, agora);
+    bichos.atualizar(dt, agora, grama);
 
     const S = cam.escala;
     ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = '#36401e'; ctx.fillRect(0, 0, tela.width, tela.height);
@@ -780,7 +789,7 @@
       }
     if (quadros % 90 === 0) for (const [k, lad] of ladrilhos) if (quadros - lad.visto > 300) ladrilhos.delete(k);
     desenharAgua(cam, agora, dt);
-    const faltaCapim = grama.quadro(ctx, cam, agora, [...extraPonte, ...extrasPredios, extraAgricultor]);
+    const faltaCapim = grama.quadro(ctx, cam, agora, [...extraPonte, ...extrasPredios, ...C.extras(ctx, cam), ...bichos.extras(ctx, cam, agora), extraAgricultor]);
     ctx.setTransform(S, 0, 0, S, -cam.x * S, -cam.y * S);
     sombras();
     particulas(dt, agora);
