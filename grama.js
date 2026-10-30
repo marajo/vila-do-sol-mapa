@@ -12,7 +12,8 @@
     ['#3c4e20', '#6e9038', '#b0ca6a'], ['#43561f', '#7a9a3e', '#bed478'], ['#4a5c22', '#86a444', '#cadc86'],
   ];
   const TONS_TABOA = [['#1d2d1c', '#36502f', '#5e7c47'], ['#223320', '#3f5a35', '#6a8851'], ['#283a23', '#47633b', '#76935a']];
-  const FAIXA = 16, LARG = 150, MARGEM = 20, CEL_MOITA = 100;
+  // pedaços de 300 px: metade das chamadas de desenho por quadro (e menos sobra transparente nas laterais)
+  const FAIXA = 16, LARG = 300, MARGEM = 20, CEL_MOITA = 100;
   // campos de cada haste no Float32Array
   const X = 0, Y = 1, ALT = 2, INCL = 3, LRG = 4, TOM = 5, F = 6, ANG = 7, T0 = 8, DUR = 9, CAB = 10, NC = 11;
 

@@ -420,15 +420,32 @@
         }
       }
     }
+    // cada bicho é desenhado numa imagem própria (na resolução da tela) e a imagem vai para o mapa; a pose é refeita em
+    // revezamento (metade dos bichos por quadro = 15 poses/s), o lugar acompanha todo quadro: o mesmo visual, metade do custo
+    const CAIXA = { vaca: [-82, -116, 82, 54], ovelha: [-46, -62, 46, 14], porco: [-46, -54, 50, 14], galinha: [-36, -58, 36, 12] };
+    let quadroN = 0;
+    function posar(g, b, agora) { // desenha o bicho com o pé em (b.x, b.y) do mundo
+      if (b.e.modelo3d) { DESENHO[b.tipo](g, b, agora); return; }
+      const sx = Math.sign(b.vis || b.lado) * (0.4 + 0.6 * Math.abs(b.vis)); // no meio da volta: encurtado, como visto em diagonal
+      g.save(); g.translate(b.x, b.y); g.scale(sx, 1); g.rotate(b.incl * 0.22); DESENHO[b.tipo](g, b, agora); g.restore();
+    }
     function extras(ctx, cam, agora) {
-      const out = [];
-      for (const b of bichos) {
-        if (b.x < cam.x - 60 || b.x > cam.x + cam.largura + 60 || b.y < cam.y - 10 || b.y > cam.y + cam.altura + 80) continue;
-        // de lado; no meio da volta fica estreito (de frente); descendo/subindo a tela inclina um pouco o corpo
-        const sx = Math.sign(b.vis || b.lado) * (0.4 + 0.6 * Math.abs(b.vis)); // no meio da volta: encurtado, como visto em diagonal
-        if (b.e.modelo3d) { out.push({ y: b.y, desenhar: () => DESENHO[b.tipo](ctx, b, agora) }); continue; } // 3D: já desenha no mundo
-        out.push({ y: b.y, desenhar: () => { ctx.save(); ctx.translate(b.x, b.y); ctx.scale(sx, 1); ctx.rotate(b.incl * 0.22); DESENHO[b.tipo](ctx, b, agora); ctx.restore(); } });
-      }
+      const out = [], Q = Math.min(3, cam.escala ?? 1);
+      quadroN++;
+      bichos.forEach((b, i) => {
+        if (b.x < cam.x - 80 || b.x > cam.x + cam.largura + 80 || b.y < cam.y - 10 || b.y > cam.y + cam.altura + 100) return;
+        const [x0, y0, x1, y1] = CAIXA[b.tipo];
+        let c = b.foto;
+        if (!c || c.q !== Q || (quadroN + i) % 2 === 0) {
+          if (!c) { c = b.foto = document.createElement('canvas'); c.q = 0; }
+          if (c.q !== Q) { c.width = Math.ceil((x1 - x0) * Q); c.height = Math.ceil((y1 - y0) * Q); c.q = Q; }
+          const g = c.getContext('2d');
+          g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, c.width, c.height);
+          g.setTransform(Q, 0, 0, Q, (-x0 - b.x) * Q, (-y0 - b.y) * Q);
+          posar(g, b, agora);
+        }
+        out.push({ y: b.y, desenhar: () => ctx.drawImage(c, b.x + x0, b.y + y0, x1 - x0, y1 - y0) });
+      });
       return out;
     }
     function bichoEm(x, y) {
