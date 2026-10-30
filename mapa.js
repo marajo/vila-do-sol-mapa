@@ -18,14 +18,41 @@
   }
   function sorteio(semente) { let s = semente % 2147483646 + 1; return () => (s = (s * 16807) % 2147483647) / 2147483647; }
 
+  // ---------- casa e celeiro (nível 1 a 3) ----------
+  const loteDe = id => lotes.find(l => l.id === id);
+  const predios = [
+    { id: 'casa', nome: 'Casa', nivel: 1, espec: n => Construcoes.especCasa(n, loteDe('casa')) },
+    { id: 'celeiro', nome: 'Celeiro', nivel: 1, espec: n => Construcoes.especCeleiro(n, loteDe('celeiro')) },
+  ];
+  for (const p of predios) p.e = p.espec(p.nivel);
+  /** distância até a construção mais perto (negativa dentro) */
+  function noPredio(x, y) {
+    let m = 999;
+    for (const { e } of predios) for (const [x0, y0, x1, y1] of e.pegadas) {
+      const dx = Math.max(x0 - x, 0, x - x1), dy = Math.max(y0 - y, 0, y - y1);
+      m = Math.min(m, dx || dy ? Math.hypot(dx, dy) : -Math.min(x - x0, x1 - x, y - y0, y1 - y));
+    }
+    return m;
+  }
+  /** calçada de pedras da casa e rampa de terra do celeiro, da porta até o pátio */
+  function naEntrada(x, y) {
+    for (const { e } of predios) {
+      const [px, py] = e.porta, meia = e.tipo === 'casa' ? 20 : 34 + (y - py) * 0.5;
+      if (y > py - 12 && y < patio.y0 + 40 && Math.abs(x - px) < meia) return true;
+    }
+    return false;
+  }
+
   // ---------- onde o capim nasce ----------
   function podeNascer(x, y) {
     const nb = ruido(x / 31, y / 31, 3);
     const m = rio.margem(x, y);
     if (m < 16 + nb * 16) return 0;                      // água e barranco de terra da beira
     if (naPonte(x, y, 12)) return 0;
+    const pr = noPredio(x, y);
+    if (pr < 10 + nb * 8 || naEntrada(x, y)) return 0;
     let k = 1;
-    if (m < 90) k = 0.25 + 0.75 * (m - 16 - nb * 16) / (74 - nb * 16);
+    if (m < 90) k = Math.min(k, 0.25 + 0.75 * (m - 16 - nb * 16) / (74 - nb * 16));
     const e = estrada.borda(x, y) + (ruido(x / 90, y / 90, 7) - 0.5) * 14;
     if (e < 28) {
       if (e < 0) {
@@ -40,6 +67,11 @@
     if (pt < 26) { if (pt < -6 + nb * 12) return 0; k = Math.min(k, 0.25 + 0.75 * Math.max(0, pt) / 26); }
     return k;
   }
+  /** gramado aparado em volta da casa e do celeiro (bem baixo junto da parede, vai subindo até o pasto) */
+  function aparado(x, y) {
+    const pr = noPredio(x, y) + (ruido(x / 40, y / 40, 23) - 0.5) * 24;
+    return pr < 40 ? 0.18 : pr < 115 ? 0.18 + 0.82 * (pr - 40) / 75 : 1;
+  }
   function taboa(x, y) {
     const m = rio.margem(x, y);
     if (m < -16 || m > 18 || naPonte(x, y, 60) || estrada.borda(x, y) < 16) return 0;
@@ -51,7 +83,7 @@
   // tom e altura do capim: ondas suaves (como na Selva) misturadas com ruído largo, para não aparecer listra de longe
   const campo = (x, y) => Math.max(0, Math.min(1, 0.5 + 0.17 * Math.sin(x / 97 + Math.sin(y / 61)) + 0.13 * Math.sin(y / 73 + x / 151) + 0.09 * Math.sin((x + y) / 37)
     + 0.6 * (ruido(x / 240, y / 240, 17) - 0.5) + 0.3 * (ruido(x / 85, y / 85, 19) - 0.5)));
-  const grama = new Grama({ largura: W, altura: H, podeNascer, taboa, campo, moitas: 55, semente: 2026, orcamentoMs: 120 });
+  const grama = new Grama({ largura: W, altura: H, podeNascer, taboa, campo, aparado, moitas: 55, semente: 2026, orcamentoMs: 120 });
 
   // ---------- texturas (padrões) ----------
   function textura(lado, pintar) { const c = document.createElement('canvas'); c.width = c.height = lado; pintar(c.getContext('2d'), lado); return c; }
@@ -170,6 +202,38 @@
   const manchas = [];
   for (let y = -100; y < H + 100; y += 70) manchas.push([y + rs() * 40, (rs() - 0.5) * 0.9, 30 + rs() * 50, 60 + rs() * 90, rs() < 0.6]);
 
+  /** chão em volta da construção: terra batida, calçada de pedras (casa) ou rampa de terra (celeiro) até o pátio */
+  function chaoDoPredio(g, e, x0, y0, x1, y1) {
+    const [a, b, c, d] = e.pegada, [px, py] = e.porta;
+    if (c + 60 < x0 || a - 60 > x1 || d + 120 < y0 || b - 60 > y1) return;
+    const casa = e.tipo === 'casa';
+    for (const [k, cor] of casa ? [[12, 'rgba(56,48,28,.45)'], [7, '#9d9380'], [4, '#bdb39e']] : [[14, 'rgba(56,48,28,.5)'], [7, '#6b5a3b']])
+      for (const [p0, p1, p2, p3] of e.pegadas) { g.fillStyle = cor; retArred(g, p0 - k, p1 - k, p2 + k, p3 + k, k + 4); g.fill(); } // calçada de cimento / terra batida
+    const fim = patio.y0 + 30, r = sorteio(e.semente * 7);
+    if (e.tipo === 'casa') {
+      for (let y = py - 4, i = 0; y < fim; y += 19, i++) { // lajes irregulares, alternando de lado
+        const x = px + (i % 2 ? 5 : -5) + (r() - 0.5) * 4, rx = 13 + r() * 4, ry = 7.5 + r() * 2;
+        g.fillStyle = 'rgba(40,32,18,.45)'; g.beginPath(); g.ellipse(x + 1.5, y + 2, rx, ry, (r() - 0.5) * 0.4, 0, 7); g.fill();
+        g.fillStyle = degradeLaje(g, x, y, rx); g.beginPath(); g.ellipse(x, y, rx, ry, (r() - 0.5) * 0.4, 0, 7); g.fill();
+      }
+    } else {
+      const meia = y => 34 + (y - py) * 0.5;
+      for (const [k, cor] of [[1.25, 'rgba(60,50,30,.5)'], [1.08, '#6b5a3b'], [1, '#8f7350'], [0.7, '#9b7d57']]) {
+        g.fillStyle = cor; caminhoRampa(g, px, py - 10, fim, y => meia(y) * k); g.fill();
+      }
+      for (const s of [-1, 1]) { // marcas das rodas da carroça
+        g.strokeStyle = 'rgba(110,84,56,.6)'; g.lineWidth = 7; g.beginPath(); g.moveTo(px + s * 20, py); g.lineTo(px + s * 30, fim); g.stroke();
+      }
+    }
+  }
+  function degradeLaje(g, x, y, rx) {
+    const d = g.createLinearGradient(x - rx, y - rx, x + rx, y + rx);
+    d.addColorStop(0, '#cbc3b0'); d.addColorStop(0.6, '#a9a18e'); d.addColorStop(1, '#878070'); return d;
+  }
+  function caminhoRampa(g, px, ya, yz, meia) {
+    g.beginPath(); g.moveTo(px - meia(ya), ya); g.lineTo(px + meia(ya), ya); g.lineTo(px + meia(yz), yz); g.lineTo(px - meia(yz), yz); g.closePath();
+  }
+
   function pintarLadrilho(lad) {
     const q = lad.cq, x0 = lad.tx * T, y0 = lad.ty * T, x1 = x0 + T, y1 = y0 + T;
     const g = lad.cv.getContext('2d');
@@ -195,6 +259,7 @@
     }
     if (pPerto) { g.globalAlpha = 0.5; g.fillStyle = '#a5875f'; poligono(g, patio.contorno(-60)); g.fill(); g.globalAlpha = 1; }
     pontos(g, pedriscos, x0, y0, x1, y1, 0.8);
+    for (const { e } of predios) chaoDoPredio(g, e, x0, y0, x1, y1);
 
     // rio (só se passa por aqui)
     const ya = Math.max(-200, y0 - 320), yz = Math.min(H + 200, y1 + 320);
@@ -381,14 +446,19 @@
   const folha = new Image(); let folhaOk = false;
   folha.onload = () => (folhaOk = true);
   folha.src = '../assets/pixellab-staff/farmer/sheet.png?v=46';
-  const agricultor = { x: P.x1 + 140, y: P.y + 26, caminho: [], dist: 0, dir: 0, rastro: 0 };
-  // grade de caminhar de 16 px: anda em terra e na ponte, prefere estradas
+  const agricultor = { x: 2960, y: 870, caminho: [], dist: 0, dir: 0, rastro: 0 };
+  // grade de caminhar de 16 px: anda em terra e na ponte, prefere estradas; não entra nas construções
   const GC = 16, GX = Math.ceil(W / GC), GY = Math.ceil(H / GC), custo = new Float32Array(GX * GY);
-  for (let j = 0; j < GY; j++) for (let i = 0; i < GX; i++) {
-    const x = i * GC + GC / 2, y = j * GC + GC / 2;
-    const ponte = naPonte(x, y, -8), seco = rio.margem(x, y) > 10;
-    custo[i + j * GX] = !(ponte || seco) || x < 20 || y < 30 || x > W - 20 || y > H - 10 ? 0 : (ponte || estrada.borda(x, y) < 0 || noPatio(x, y) < 0) ? 0.55 : 1;
+  function recalcularCusto(x0 = 0, y0 = 0, x1 = W, y1 = H) {
+    for (let j = Math.max(0, Math.floor(y0 / GC)); j <= Math.min(GY - 1, Math.floor(y1 / GC)); j++)
+      for (let i = Math.max(0, Math.floor(x0 / GC)); i <= Math.min(GX - 1, Math.floor(x1 / GC)); i++) {
+        const x = i * GC + GC / 2, y = j * GC + GC / 2;
+        const ponte = naPonte(x, y, -8), seco = rio.margem(x, y) > 10;
+        custo[i + j * GX] = !(ponte || seco) || noPredio(x, y) < 6 || x < 20 || y < 30 || x > W - 20 || y > H - 10 ? 0
+          : (ponte || estrada.borda(x, y) < 0 || noPatio(x, y) < 0 || naEntrada(x, y)) ? 0.55 : 1;
+      }
   }
+  recalcularCusto();
   function rota(ax, ay, bx, by) {
     const ini = Math.floor(ax / GC) + Math.floor(ay / GC) * GX;
     let fim = Math.floor(bx / GC) + Math.floor(by / GC) * GX;
@@ -473,7 +543,8 @@
   addEventListener('resize', medir);
   medir();
   cam.zoom = Math.max(zMin, 1); limitar();
-  centrar(P.x1 + 260, P.y - 40);
+  ajustarZoom(Math.min(1, cssW / 1500), cssW / 2, cssH / 2);
+  centrar(3215, 560); // começa no terreiro, vendo a casa e o celeiro
 
   tela.addEventListener('wheel', e => { e.preventDefault(); ajustarZoom(cam.zoom * Math.exp(-e.deltaY * 0.0015), e.clientX, e.clientY); }, { passive: false });
   const dedos = new Map();
@@ -499,8 +570,12 @@
     if (!dedos.has(e.pointerId)) return;
     dedos.delete(e.pointerId); tela.classList.remove('arrastando');
     if (gesto && gesto.tipo === 'arrasto' && !gesto.moveu && e.type === 'pointerup') {
-      const wx = cam.x + e.clientX / cam.zoom, wy = cam.y + e.clientY / cam.zoom, c = rota(agricultor.x, agricultor.y, wx, wy);
-      if (c) { agricultor.caminho = c; avisar(''); } else avisar('Ali é água: o agricultor não nada.');
+      const wx = cam.x + e.clientX / cam.zoom, wy = cam.y + e.clientY / cam.zoom, pr = predioEm(wx, wy);
+      if (pr) { if (pr.nivel < 3) mudarNivel(pr, pr.nivel + 1); else avisar(`${pr.nome} já está no nível máximo (3)`); }
+      else {
+        const c = rota(agricultor.x, agricultor.y, wx, wy);
+        if (c) { agricultor.caminho = c; avisar(''); } else avisar('Ali não dá para andar.');
+      }
     }
     if (dedos.size === 1) { const [d] = [...dedos.values()]; gesto = { tipo: 'arrasto', x0: d.x, y0: d.y, cx: cam.x, cy: cam.y, moveu: true }; }
     else if (!dedos.size) gesto = null;
@@ -535,8 +610,10 @@
     g.fillStyle = '#3d5d4c'; faixaRio(g, -60, H + 60, (y, s) => rio.hwLado(y, s)); g.fill();
     g.fillStyle = '#6b5038'; g.fillRect(P.x0, P.y - P.meia, P.x1 - P.x0, P.meia * 2);
     g.setLineDash([60, 40]); g.lineWidth = 16; g.strokeStyle = 'rgba(255,248,220,.85)'; g.fillStyle = 'rgba(255,248,220,.12)';
-    for (const l of lotes) { g.fillRect(l.x, l.y, l.w, l.h); g.strokeRect(l.x, l.y, l.w, l.h); }
+    const livres = lotes.filter(l => !predios.some(p => p.id === l.id));
+    for (const l of livres) { g.fillRect(l.x, l.y, l.w, l.h); g.strokeRect(l.x, l.y, l.w, l.h); }
     g.setLineDash([]);
+    for (const { e } of predios) { const [x0, y0, x1, y1] = e.pegada; g.fillStyle = e.tipo === 'casa' ? '#b5562f' : '#9b3022'; g.fillRect(x0, y0, x1 - x0, y1 - y0); }
     g.fillStyle = '#fff8e0'; g.font = 'bold 120px system-ui, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
     if (miniW > 200) for (const l of lotes) g.fillText(l.nome.replace('Curral das ', ''), l.x + l.w / 2, l.y + l.h / 2);
   }
@@ -571,6 +648,97 @@
     ctx.restore();
   }
 
+  // ---------- casa e celeiro: imagem na resolução do zoom, crescimento, sombra, fumaça e poeira ----------
+  const qPredio = () => (cam.escala <= 1.2 ? 2 : cam.escala <= 2.2 ? 3 : 4); // sempre acima da tela: nada pixelado
+  function assar(p, q) {
+    const [x0, y0, x1, y1] = p.e.caixa, c = document.createElement('canvas');
+    c.width = Math.ceil((x1 - x0) * q); c.height = Math.ceil((y1 - y0) * q);
+    const g = c.getContext('2d'); g.setTransform(q, 0, 0, q, -x0 * q, -y0 * q);
+    p.fumaca = Construcoes.pintar(g, p.e).fumaca; p.cv = c; p.cq = q;
+  }
+  for (const p of predios) assar(p, qPredio());
+  const fumaca = [], poeira = [];
+  const voltaSuave = t => { const c = 1.9; return 1 + (c + 1) * (t - 1) ** 3 + c * (t - 1) ** 2; }; // passa um pouco e assenta
+  function desenharPredio(p, agora) {
+    const [x0, y0, x1, y1] = p.e.caixa, a = p.anim;
+    if (a) {
+      const t = (agora - a.t0) / 1.4;
+      if (t >= 1) p.anim = null;
+      else {
+        if (t < 0.4) { const [o0, o1, o2, o3] = a.e.caixa; ctx.globalAlpha = 1 - t / 0.4; ctx.drawImage(a.cv, o0, o1, o2 - o0, o3 - o1); }
+        const s = a.s0 + (1 - a.s0) * voltaSuave(t), cx = (p.e.pegada[0] + p.e.pegada[2]) / 2, by = p.e.base;
+        ctx.globalAlpha = Math.min(1, t * 3.5);
+        ctx.save(); ctx.translate(cx, by); ctx.scale(s, s); ctx.translate(-cx, -by);
+        ctx.drawImage(p.cv, x0, y0, x1 - x0, y1 - y0); ctx.restore(); ctx.globalAlpha = 1;
+        return;
+      }
+    }
+    ctx.drawImage(p.cv, x0, y0, x1 - x0, y1 - y0);
+  }
+  const extrasPredios = predios.map(p => ({ get y() { return p.e.base; }, desenhar: () => desenharPredio(p, ultimo / 1000) }));
+  /** sombra no chão, a leste (sol a oeste-noroeste); escurece também o capim e quem passar por ela */
+  function sombras() {
+    for (const p of predios) {
+      if (p.anim) continue;
+      const [x0, y0, x1, y1] = p.e.pegada, h = p.e.altura, dx = h * 0.45, [c0, c1, c2] = p.e.caixa;
+      if (x1 + dx < cam.x || x0 > cam.x + cam.largura) continue;
+      ctx.save();
+      ctx.beginPath(); ctx.rect(cam.x - 50, cam.y - 50, cam.largura + 100, cam.altura + 100); ctx.rect(c0 + 24, c1, c2 - c0 - 48, p.e.base - c1); ctx.clip('evenodd');
+      for (const [k, a] of [[1, 0.13], [0.8, 0.1], [0.55, 0.08]]) {
+        ctx.fillStyle = `rgba(14,22,8,${a})`;
+        ctx.beginPath(); ctx.moveTo(x1, y0 + 6); ctx.lineTo(x1 + dx * k, y0 + 18); ctx.lineTo(x1 + dx * k, y1 - 4); ctx.lineTo(x1, y1); ctx.closePath(); ctx.fill();
+      }
+      ctx.restore();
+    }
+  }
+  function particulas(dt, agora) {
+    for (const p of predios) for (const [x, y] of p.anim ? [] : p.fumaca || [])
+      if (Math.random() < dt * 5) fumaca.push({ x: x + (Math.random() - 0.5) * 4, y, vida: 0, dura: 3 + Math.random() * 2, r: 3 + Math.random() * 2 });
+    for (let i = fumaca.length - 1; i >= 0; i--) {
+      const f = fumaca[i]; f.vida += dt;
+      if (f.vida > f.dura) { fumaca.splice(i, 1); continue; }
+      const t = f.vida / f.dura, x = f.x + f.vida * 11 + Math.sin(agora * 1.3 + f.dura * 5) * 3 * t, y = f.y - f.vida * 19, r = f.r + t * 16;
+      const d = ctx.createRadialGradient(x, y, 0, x, y, r);
+      d.addColorStop(0, `rgba(232,228,220,${0.32 * (1 - t)})`); d.addColorStop(1, 'rgba(232,228,220,0)');
+      ctx.fillStyle = d; ctx.fillRect(x - r, y - r, r * 2, r * 2);
+    }
+    for (let i = poeira.length - 1; i >= 0; i--) {
+      const f = poeira[i]; f.vida += dt;
+      if (f.vida > f.dura) { poeira.splice(i, 1); continue; }
+      const t = f.vida / f.dura, x = f.x + f.vx * f.vida, y = f.y + f.vy * f.vida + 12 * f.vida * f.vida, r = f.r * (1 + t * 1.6);
+      const d = ctx.createRadialGradient(x, y, 0, x, y, r);
+      d.addColorStop(0, `rgba(196,174,132,${0.5 * (1 - t)})`); d.addColorStop(1, 'rgba(196,174,132,0)');
+      ctx.fillStyle = d; ctx.fillRect(x - r, y - r, r * 2, r * 2);
+    }
+  }
+  function mudarNivel(p, n) {
+    if (n === p.nivel || n < 1 || n > 3) return;
+    const velho = { e: p.e, cv: p.cv }, agora = ultimo / 1000;
+    p.nivel = n; p.e = p.espec(n); assar(p, qPredio());
+    const a = velho.e.pegada, b = p.e.pegada;
+    p.anim = { t0: agora, e: velho.e, cv: velho.cv, s0: (a[2] - a[0]) / (b[2] - b[0]) };
+    // o chão, o capim e a grade de caminhar mudam onde a construção estava e onde ela está agora
+    const x0 = Math.min(a[0], b[0]) - 140, y0 = Math.min(a[1], b[1]) - 140, x1 = Math.max(a[2], b[2]) + 140, y1 = Math.max(a[3], b[3]) + 140;
+    grama.refazer(x0, y0, x1, y1);
+    for (const [k, lad] of ladrilhos) if (lad.tx * T < x1 && lad.tx * T + T > x0 && lad.ty * T < y1 && lad.ty * T + T > y0) ladrilhos.delete(k);
+    recalcularCusto(x0, y0, x1, y1);
+    if (noPredio(agricultor.x, agricultor.y) < 8) { agricultor.x = p.e.porta[0] + 40; agricultor.y = p.e.porta[1] + 20; agricultor.caminho = []; }
+    for (let i = 0; i < 70; i++) {
+      const x = b[0] + Math.random() * (b[2] - b[0]);
+      poeira.push({ x, y: p.e.base - Math.random() * 20, vx: (x - (b[0] + b[2]) / 2) * 0.25 + (Math.random() - 0.5) * 30, vy: -14 - Math.random() * 26, vida: -Math.random() * 0.5, dura: 1.4 + Math.random() * 1.2, r: 9 + Math.random() * 14 });
+    }
+    pintarMini(); atualizarBotoes();
+    avisar(`${p.nome} ${n > velho.e.nivel ? 'evoluiu para' : 'voltou para'} o nível ${n}`);
+  }
+  const bNiveis = [...document.querySelectorAll('[data-predio]')];
+  function atualizarBotoes() { for (const b of bNiveis) b.setAttribute('aria-pressed', String(predios.find(p => p.id === b.dataset.predio).nivel === +b.dataset.nivel)); }
+  for (const b of bNiveis) b.onclick = () => mudarNivel(predios.find(p => p.id === b.dataset.predio), +b.dataset.nivel);
+  atualizarBotoes();
+  /** construção sob o ponto (tela tocada), pelo desenho e não só pela planta */
+  function predioEm(wx, wy) {
+    return predios.find(({ e }) => wx > e.caixa[0] + 24 && wx < e.caixa[2] - 24 && wy > e.caixa[1] + 40 && wy < e.base);
+  }
+
   // ---------- quadro ----------
   const medidor = document.getElementById('medidor'), carregando = document.getElementById('carregando');
   let ultimo = 0, gasto = 0, quadros = 0, pronto = false;
@@ -587,8 +755,12 @@
     const dt = Math.min(0.1, (t - ultimo) / 1000), agora = t / 1000, ini = performance.now();
     ultimo = t; quadros++;
     // qualidade do desenho acompanha o zoom (depois que o zoom para de mudar)
-    if (performance.now() - zoomMudou > 300) grama.q = qualidade();
-    grama.orcamentoMs = pronto ? 9 : 120;
+    if (performance.now() - zoomMudou > 300) {
+      grama.q = qualidade();
+      const qp = qPredio();
+      for (const p of predios) if (p.cq !== qp && !p.anim) assar(p, qp);
+    }
+    grama.orcamentoMs = !pronto ? 120 : predios.some(p => p.anim) ? 26 : 9; // na obra, o gramado em volta se refaz debaixo da poeira
     andar(dt, agora);
 
     const S = cam.escala;
@@ -608,8 +780,10 @@
       }
     if (quadros % 90 === 0) for (const [k, lad] of ladrilhos) if (quadros - lad.visto > 300) ladrilhos.delete(k);
     desenharAgua(cam, agora, dt);
-    const faltaCapim = grama.quadro(ctx, cam, agora, [...extraPonte, extraAgricultor]);
+    const faltaCapim = grama.quadro(ctx, cam, agora, [...extraPonte, ...extrasPredios, extraAgricultor]);
     ctx.setTransform(S, 0, 0, S, -cam.x * S, -cam.y * S);
+    sombras();
+    particulas(dt, agora);
     if (mostrarLotes) desenharLotes();
     if (aviso && performance.now() < avisoAte) {
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.font = '600 15px system-ui, sans-serif'; ctx.textAlign = 'center';

@@ -29,6 +29,8 @@
       this.dens = op.densidade ?? 0.11;
       this.podeNascer = op.podeNascer ?? (() => 1);
       this.taboa = op.taboa ?? (() => 0);
+      /** 0–1: multiplica a altura do capim (gramado aparado em volta da casa) */
+      this.aparado = op.aparado ?? (() => 1);
       this.campo = op.campo ?? ((x, y) => Math.max(0, Math.min(1, 0.5 + 0.3 * Math.sin(x / 97 + Math.sin(y / 61)) + 0.24 * Math.sin(y / 73 + x / 151) + 0.12 * Math.sin((x + y) / 37))));
       this.nGrama = (op.tons ?? TONS_PASTO).length;
       this.tons = [...(op.tons ?? TONS_PASTO), ...TONS_TABOA];
@@ -67,7 +69,7 @@
         const k = this.podeNascer(x, y);
         if (k <= 0) continue;
         const cp = this.campo(x, y);
-        const alt = (11 + cp * (this.altMax - 11)) * (0.45 + 0.55 * Math.min(1, k)) * (0.8 + a * 0.32);
+        const alt = (11 + cp * (this.altMax - 11)) * (0.45 + 0.55 * Math.min(1, k)) * (0.8 + a * 0.32) * this.aparado(x, y);
         const tom = Math.max(0, Math.min(nT - 1, Math.round(cp * (nT - 1) + (b - 0.5) * 2.4)));
         lista.push([x, y, alt, -5 + c * 10, 1.6 + d, tom, 0]);
       }
@@ -87,7 +89,7 @@
           if (m() > pc) continue;
           const cx = (mx + m()) * CEL_MOITA, cy = (my + m()) * CEL_MOITA, rr = 14 + m() * 16;
           if (cy + rr < y0 - 4 || cy - rr > y0 + FAIXA || cx + rr < x0 || cx - rr > x0 + LARG) continue;
-          if (this.podeNascer(cx, cy) < 1) continue;
+          if (this.podeNascer(cx, cy) < 1 || this.aparado(cx, cy) < 1) continue;
           const tot = Math.round(rr * 5);
           for (let k = 0; k < tot; k++) {
             const ang = m() * 7, dd = Math.sqrt(m()) * rr, x = cx + Math.cos(ang) * dd, y = cy + Math.sin(ang) * dd * 0.7;
@@ -137,13 +139,13 @@
 
     desenhar(p, agora) {
       const Q = this.q, w = LARG + MARGEM * 2, h = FAIXA + p.topo + 4;
-      if (!p.cv || p.cq !== Q) { p.cv = document.createElement('canvas'); p.cv.width = Math.ceil(w * Q); p.cv.height = Math.ceil(h * Q); p.cq = Q; }
+      if (!p.cv || p.cq !== Q || p.cv.height !== Math.ceil(h * Q)) { p.cv = document.createElement('canvas'); p.cv.width = Math.ceil(w * Q); p.cv.height = Math.ceil(h * Q); p.cq = Q; }
       const g = p.cv.getContext('2d');
       g.setTransform(Q, 0, 0, Q, 0, 0); g.clearRect(0, 0, w, h); g.lineCap = 'round';
       g.translate(-(p.x0 - MARGEM), -(p.y0 - p.topo - 2));
       const d = p.d, maxTom = this.nGrama - 1;
       let ainda = false;
-      p.mexido = false;
+      p.mexido = false; p.sujo = false;
       for (let i = 0, o = 0; i < p.n; i++, o += NC) {
         const f = this.forca(d, o, agora), x = d[o + X], y = d[o + Y], alt = d[o + ALT], incl = d[o + INCL], tom = d[o + TOM];
         if (f > 0.01) {
@@ -185,6 +187,15 @@
     /** quem anda: chame a cada ~5 px andados, no pé do boneco. (dx, dy) = sentido do passo */
     pisar(x, y, dx, dy, agora, raio = 18, dur = 9) { this.empurrar(x, y, raio, Math.atan2(dx, -dy), 1, dur, agora); }
 
+    /** a regra de nascer mudou num retângulo (construção cresceu ou diminuiu): as hastes dali nascem de novo */
+    refazer(x0, y0, x1, y1) {
+      for (let l = Math.max(0, Math.floor((y0 - 4) / FAIXA)); l <= Math.min(this.rows - 1, Math.floor((y1 + 4) / FAIXA)); l++)
+        for (let c = Math.max(0, Math.floor((x0 - 40) / LARG)); c <= Math.min(this.cols - 1, Math.floor((x1 + 40) / LARG)); c++) {
+          const p = this.ped[c + l * this.cols];
+          if (p) { p.d = null; p.n = 0; p.fixo = false; p.sujo = true; }
+        }
+    }
+
     /** deixa a grama mais baixa de vez (cortador, enxada, colheita) */
     aparar(x, y, r, fator = 0.3, minimo = 3) {
       this.perto(x, y, r, (p, o) => {
@@ -224,8 +235,8 @@
         for (let l = l0; l <= l1; l++) for (let c = c0; c <= c1; c++) {
           const p = this.pedaco(c, l);
           if (!p.d) { if (performance.now() - inicio > this.orcamentoMs) { faltam++; continue; } this.gerar(p); }
-          if (!p.n) continue;
-          const precisa = passo === 0 ? !p.cv : p.cq !== this.q;
+          if (!p.n) { p.cv = null; continue; }
+          const precisa = passo === 0 ? !p.cv || p.sujo : p.cq !== this.q;
           if (!precisa) continue;
           if (performance.now() - inicio > this.orcamentoMs) { faltam++; continue; }
           this.desenhar(p, agora);

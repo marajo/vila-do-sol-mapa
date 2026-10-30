@@ -16,6 +16,11 @@
     .botoes { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 6px; }
     .botoes button { font: inherit; font-size: 12px; color: #2b2a17; background: #e9e1bf; border: 0; border-radius: 999px; padding: 5px 10px; cursor: pointer; }
     .botoes button[aria-pressed="true"] { background: #b7d574; }
+    .niveis { display: flex; align-items: center; gap: 4px; margin: 0 0 6px; font-size: 12px; }
+    .niveis span { margin: 0 2px 0 6px; opacity: .85; }
+    .niveis span:first-child { margin-left: 0; }
+    .niveis button { font: inherit; font-weight: 700; width: 26px; height: 24px; border: 0; border-radius: 7px; background: #e9e1bf; color: #2b2a17; cursor: pointer; }
+    .niveis button[aria-pressed="true"] { background: #f0b04a; }
     #mini { right: 12px; bottom: 12px; width: 250px; height: 144px; padding: 0; cursor: pointer; touch-action: none; }
     #medidor { left: 12px; bottom: 12px; padding: 5px 9px; font: 11px ui-monospace, Consolas, monospace; opacity: .85; }
     #carregando { left: 50%; top: 50%; transform: translate(-50%, -50%); padding: 12px 18px; font-size: 15px; }
@@ -41,13 +46,18 @@
       <button id="bLonge" aria-pressed="false">Ver mais longe</button>
       <button id="bAgricultor">Achar o agricultor</button>
     </div>
-    <small class="ajuda">Arraste para andar pelo mapa · roda do mouse ou pinça para zoom · clique no chão e o agricultor vai até lá (pela ponte, se for do outro lado do rio)</small>
+    <div class="niveis">
+      <span>Casa</span><button data-predio="casa" data-nivel="1">1</button><button data-predio="casa" data-nivel="2">2</button><button data-predio="casa" data-nivel="3">3</button>
+      <span>Celeiro</span><button data-predio="celeiro" data-nivel="1">1</button><button data-predio="celeiro" data-nivel="2">2</button><button data-predio="celeiro" data-nivel="3">3</button>
+    </div>
+    <small class="ajuda">Arraste para andar pelo mapa · roda do mouse ou pinça para zoom · clique no chão e o agricultor vai até lá · clique na casa ou no celeiro para evoluir (protótipo: sem custo de moedas)</small>
   </div>
   <canvas id="mini" class="caixa" aria-label="Mapa inteiro: toque para ir até um lugar"></canvas>
   <div id="medidor" class="caixa"></div>
   <div id="carregando" class="caixa">Plantando o capim…</div>
-  <script src="layout.js?v=1"></script>
-  <script src="grama.js?v=1"></script>
-  <script src="mapa.js?v=1"></script>
+  <script src="layout.js?v=5"></script>
+  <script src="grama.js?v=5"></script>
+  <script src="construcoes.js?v=5"></script>
+  <script src="mapa.js?v=5"></script>
 </body>
 </html>
