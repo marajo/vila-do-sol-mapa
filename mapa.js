@@ -28,6 +28,7 @@
   for (const p of predios) p.e = p.espec(p.nivel);
   // ---------- currais e animais ----------
   const C = Currais.criar(L, Construcoes.util), bichos = Animais.criar(C);
+  const CID = Cidade.criar(Construcoes.util); // a cidadezinha a oeste do rio
   bichos.definirQuantos(id => jogo.estado.animais[id] || 0); // quantos bichos o jogador comprou
   // decorações compradas na loja: { d (catálogo), x, y, cv }
   const DEC = Decor.criar(Construcoes.util), decoracoes = [];
@@ -53,6 +54,7 @@
 
   // ---------- onde o capim nasce ----------
   function podeNascer(x, y) {
+    if (Cidade.dentro(x, y, 10)) return 0; // na cidade o chão é pintado (gramado rente, ruas, calçadas)
     const nb = ruido(x / 31, y / 31, 3);
     const m = rio.margem(x, y);
     if (m < 16 + nb * 16) return 0;                      // água e barranco de terra da beira
@@ -268,6 +270,7 @@
     }
     if (pPerto) { g.globalAlpha = 0.5; g.fillStyle = '#a5875f'; poligono(g, patio.contorno(-60)); g.fill(); g.globalAlpha = 1; }
     pontos(g, pedriscos, x0, y0, x1, y1, 0.8);
+    CID.pintarChao(g, x0, y0, x1, y1);
     for (const { e } of predios) chaoDoPredio(g, e, x0, y0, x1, y1);
     C.pintarChao(g, x0, y0, x1, y1);
 
@@ -459,8 +462,8 @@
       for (let i = Math.max(0, Math.floor(x0 / GC)); i <= Math.min(GX - 1, Math.floor(x1 / GC)); i++) {
         const x = i * GC + GC / 2, y = j * GC + GC / 2;
         const ponte = naPonte(x, y, -8), seco = rio.margem(x, y) > 10;
-        custo[i + j * GX] = !(ponte || seco) || noPredio(x, y) < 6 || C.bloqueia(x, y) || decorEm(x, y, 4) || x < 20 || y < 30 || x > W - 20 || y > H - 10 ? 0
-          : (ponte || estrada.borda(x, y) < 0 || noPatio(x, y) < 0 || naEntrada(x, y)) ? 0.55 : 1;
+        custo[i + j * GX] = !(ponte || seco) || noPredio(x, y) < 6 || C.bloqueia(x, y) || decorEm(x, y, 4) || CID.bloqueia(x, y, 6) || x < 20 || y < 30 || x > W - 20 || y > H - 10 ? 0
+          : (ponte || estrada.borda(x, y) < 0 || (Cidade.dentro(x, y) && Cidade.naRua(x, y) < Cidade.CAL) || noPatio(x, y) < 0 || naEntrada(x, y)) ? 0.55 : 1;
       }
   }
   recalcularCusto();
@@ -590,6 +593,8 @@
       if (colocando) { colocarDecor(wx, wy); return; }
       const dc = decoracoes.find(o => { const c = DEC.caixa(o.d, o.x, o.y); return wx > c[0] + 12 && wx < c[2] - 12 && wy > c[1] + 8 && wy < c[3]; });
       if (dc && !tb && !bi) { avisar(dc.d.nome); return; }
+      const pc = !tb && !bi && CID.predioEm(wx, wy);
+      if (pc) { if (pc.id === 'mercado') abrirLoja(); else avisar(pc.nome); return; }
       const ob = !tb && !bi ? C.objetoEm(wx, wy) : null;
       if (tb) avisar(equipe.descricao(tb));
       else if (ob) avisar(ob.rotuloAgora ? ob.rotuloAgora(ultimo / 1000) : ob.rotulo);
@@ -622,6 +627,7 @@
   const clima = Clima.criar({
     trovejar: (perto, atraso) => som.trovejar(perto, atraso),
     luzes: () => [...predios.filter(p => !p.e.vazio).map(p => [p.e.porta[0], p.e.porta[1] - 30, p.id === 'casa' ? 170 : 120]),
+      ...CID.luzes(),
       ...decoracoes.filter(o => o.d.luz).map(o => [o.x + o.d.luz[0] + 9, o.y + o.d.luz[1], o.d.luz[2]])],
   });
   addEventListener('pointerdown', () => som.ativar(), true); addEventListener('keydown', () => som.ativar(), true); // o navegador só libera o áudio depois de um toque
@@ -706,6 +712,7 @@
     g.fillStyle = '#7a6a48'; faixaRio(g, -60, H + 60, (y, s) => rio.hwLado(y, s) + 30); g.fill();
     g.fillStyle = '#3d5d4c'; faixaRio(g, -60, H + 60, (y, s) => rio.hwLado(y, s)); g.fill();
     g.fillStyle = '#6b5038'; g.fillRect(P.x0, P.y - P.meia, P.x1 - P.x0, P.meia * 2);
+    CID.mini(g);
     g.setLineDash([60, 40]); g.lineWidth = 16; g.strokeStyle = 'rgba(255,248,220,.85)'; g.fillStyle = 'rgba(255,248,220,.12)';
     const livres = lotes.filter(l => !predios.some(p => p.id === l.id) && !C.currais.some(c => c.id === l.id));
     C.mini(g);
@@ -993,6 +1000,7 @@
   function lugarLivre(d, x, y) {
     const [a, b, c, e] = DEC.pegada(d, x, y);
     if (a < 40 || b < 60 || c > W - 40 || e > H - 30) return false;
+    if (Cidade.dentro(a, b, 30) || Cidade.dentro(c, e, 30) || Cidade.dentro(a, e, 30) || Cidade.dentro(c, b, 30)) return false;
     for (const l of lotes) if (c > l.x - 16 && a < l.x + l.w + 16 && e > l.y - 16 && b < l.y + l.h + 16) return false;
     for (let yy = b; yy <= e; yy += 8) for (let xx = a; xx <= c; xx += 8) {
       if (custo[Math.floor(xx / GC) + Math.floor(yy / GC) * GX] !== 1 || estrada.borda(xx, yy) < 14 || decorEm(xx, yy, 14)) return false;
@@ -1114,7 +1122,7 @@
 
   // ---------- quadro ----------
   const medidor = document.getElementById('medidor'), carregando = document.getElementById('carregando');
-  let ultimo = 0, gasto = 0, quadros = 0, pronto = false;
+  let ultimo = 0, gasto = 0, quadros = 0, pronto = false, qCidade = 0, faltouCapim = false;
   function qualidade() {
     const S = cam.escala;
     return S <= 1.05 ? 1 : S <= 1.3 ? 1.25 : S <= 1.6 ? 1.5 : S <= 2.1 ? 2 : 2.5;
@@ -1145,9 +1153,10 @@
       const qp = qPredio();
       for (const p of predios) if (p.cq !== qp && !p.anim) assar(p, qp);
       if (qCurrais !== qp) { C.assar(qp); qCurrais = qp; }
+      if (qCidade !== qp) { CID.assar(qp); qCidade = qp; }
     }
     grama.longe = cam.zoom < 0.72; // de longe o capim vira placas prontas (bem mais leve)
-    grama.orcamentoMs = !pronto ? 120 : predios.some(p => p.anim) ? 26 : 9; // na obra, o gramado em volta se refaz debaixo da poeira
+    grama.orcamentoMs = !pronto ? 120 : predios.some(p => p.anim) ? 26 : grama.longe && faltouCapim ? 18 : 9; // de longe, enquanto faltam placas, monta mais rápido // na obra, o gramado em volta se refaz debaixo da poeira
     C.atualizar(dt);
     equipe.atualizar(dt, agora);
     bichos.atualizar(dt, agora, grama, equipe.gente());
@@ -1170,7 +1179,7 @@
       }
     if (quadros % 90 === 0) for (const [k, lad] of ladrilhos) if (quadros - lad.visto > 300) ladrilhos.delete(k);
     desenharAgua(cam, agora, dt);
-    const faltaCapim = grama.quadro(ctx, cam, agora, [...extraPonte, ...extrasPredios, ...C.extras(ctx, cam, agora), ...bichos.extras(ctx, cam, agora), ...equipe.extras(ctx, cam, agora), ...extrasDecor(), ...extrasCaminhao()]);
+    const faltaCapim = grama.quadro(ctx, cam, agora, [...extraPonte, ...extrasPredios, ...C.extras(ctx, cam, agora), ...bichos.extras(ctx, cam, agora), ...equipe.extras(ctx, cam, agora), ...extrasDecor(), ...extrasCaminhao(), ...CID.extras(ctx, cam, agora)]);
     ctx.setTransform(S, 0, 0, S, -cam.x * S, -cam.y * S);
     sombras();
     particulas(dt, agora);
@@ -1186,6 +1195,7 @@
     }
     desenharMini();
 
+    faltouCapim = faltaCapim > 0;
     if (!pronto && !faltaCapim && !faltaChao) { pronto = true; carregando.hidden = true; }
     gasto = gasto * 0.9 + (performance.now() - ini) * 0.1;
     if (quadros % 15 === 0) {
