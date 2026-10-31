@@ -54,7 +54,7 @@
 
   // ---------- onde o capim nasce ----------
   function podeNascer(x, y) {
-    if (Cidade.dentro(x, y, 10)) return 0; // na cidade o chão é pintado (gramado rente, ruas, calçadas)
+    const kc0 = Cidade.capim(x, y); if (kc0 !== null) return kc0; // cidade: gramado nos canteiros, nada nas ruas, calçadas e caminhos
     const nb = ruido(x / 31, y / 31, 3);
     const m = rio.margem(x, y);
     if (m < 16 + nb * 16) return 0;                      // água e barranco de terra da beira
@@ -79,6 +79,7 @@
   }
   /** gramado aparado em volta da casa e do celeiro (bem baixo junto da parede, vai subindo até o pasto) */
   function aparado(x, y) {
+    if (Cidade.dentro(x, y, 12)) return 0.3; // gramado da cidade: aparado, baixinho e uniforme
     const pr = noPredio(x, y) + (ruido(x / 40, y / 40, 23) - 0.5) * 24;
     return (pr < 40 ? 0.18 : pr < 115 ? 0.18 + 0.82 * (pr - 40) / 75 : 1) * C.aparado(x, y);
   }
