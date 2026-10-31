@@ -932,7 +932,8 @@
   document.getElementById('bFecharCeleiro').onclick = () => abrirCeleiro(false);
   addEventListener('keydown', e => { if (e.key === 'Escape' && !celeiroDlg.hidden) abrirCeleiro(false); });
   setInterval(() => jogo.salvar(), 15000);
-  addEventListener('pagehide', () => jogo.salvar());
+  const salvarAoSair = () => jogo.salvar();
+  addEventListener('pagehide', salvarAoSair);
   atualizarBotoes();
   // ---------- loja: sementes, animais e decorações ----------
   const lojaDlg = document.getElementById('lojaDlg'), lojaCorpo = document.getElementById('lojaCorpo'), abas = [...document.querySelectorAll('#lojaDlg [data-aba]')];
@@ -1092,6 +1093,18 @@
     const im = imgCam(k.vista, k.carga ? 1 : 0), [a, b, c, d] = im.caixa, sac = k.fase === 'carregando' ? 0 : Math.sin(ultimo / 70) * 0.5;
     return [{ y: k.y, desenhar: () => { ctx.save(); ctx.translate(k.x, k.y + sac); if (k.vista === 'lado' && k.vira < 0) ctx.scale(-1, 1); ctx.drawImage(im.cv, a, b, c - a, d - b); ctx.restore(); } }];
   }
+
+  // ---------- testes (Opções): moedas, nível e sementes de graça para experimentar o jogo ----------
+  function presente(f, texto) { f(jogo.estado); jogo.salvar(); som.menu('moedas'); avisar(texto); atualizarBotoes(); if (!lojaDlg.hidden) montarLoja(); }
+  document.getElementById('tMoedas').onclick = () => presente(e => { e.moedas += 1000; }, '+1.000 moedas para testar');
+  document.getElementById('tMoedas10').onclick = () => presente(e => { e.moedas += 10000; }, '+10.000 moedas para testar');
+  document.getElementById('tNivel').onclick = () => presente(e => { e.xp = (Math.floor(e.xp / 100) + 1) * 100; }, `Agora você está no nível ${jogo.nivelJogador() + 1}`);
+  document.getElementById('tSementes').onclick = () => presente(e => { for (const k in Jogo.SEMENTES) e.sementes[k] = (e.sementes[k] || 0) + 10; }, '+10 pacotes de cada semente');
+  document.getElementById('tZerar').onclick = () => {
+    if (!confirm('Apagar o progresso do mapa novo e começar do zero? (o jogo antigo não é afetado)')) return;
+    try { localStorage.setItem(Jogo.CHAVE, JSON.stringify({ versao: 1, niveis: { casa: 1 }, moedas: 150, xp: 0, armazem: {}, importado: true })); } catch (x) { /* sem armazenamento */ }
+    removeEventListener('pagehide', salvarAoSair); location.reload();
+  };
 
   if (jogo.origem === 'importado') setTimeout(() => avisar(`Trouxemos do jogo atual: ${jogo.estado.moedas} moedas e o seu nível`), 1500);
   /** construção sob o ponto (tela tocada), pelo desenho e não só pela planta */

@@ -74,6 +74,9 @@
     #opcoes .vol select { grid-column: 2 / 4; font: inherit; font-size: 12px; border: 0; border-radius: 7px; padding: 4px 6px; background: #e9e1bf; color: #2b2a17; }
     #opcoes input[type=range] { width: 100%; accent-color: #b7d574; }
     #opcoes output { text-align: right; font-variant-numeric: tabular-nums; opacity: .85; }
+    #opcoes .testes { display: flex; flex-wrap: wrap; gap: 6px; }
+    #opcoes .testes button { font: inherit; font-size: 12px; border: 0; border-radius: 999px; padding: 5px 10px; background: #b7d574; color: #22301a; cursor: pointer; }
+    #opcoes .testes .perigo { background: #e4826a; }
     #opcoes .nota { display: block; margin-top: 10px; opacity: .65; font-size: 11px; }
     #carregando { left: 50%; top: 50%; transform: translate(-50%, -50%); padding: 12px 18px; font-size: 15px; }
     @media (max-width: 900px), (max-height: 500px) {
@@ -144,23 +147,25 @@
     <h3>Tempo</h3>
     <div class="vol"><label for="selHora">Hora do dia</label><select id="selHora"><option value="auto">Passando (1 dia = 6 min)</option><option value="dia">Sempre dia</option><option value="noite">Sempre noite</option></select></div>
     <div class="vol"><label for="selChuva">Chuva</label><select id="selChuva"><option value="auto">De vez em quando</option><option value="sim">Chovendo</option><option value="nao">Sem chuva</option></select></div>
+    <h3>Testes</h3>
+    <div class="testes"><button id="tMoedas">+1.000 🪙</button><button id="tMoedas10">+10.000 🪙</button><button id="tNivel">+1 nível</button><button id="tSementes">+10 de cada semente</button><button id="tZerar" class="perigo">Recomeçar do zero</button></div>
     <small class="nota">O som começa depois do primeiro toque na tela. As opções ficam guardadas neste navegador.</small>
   </section>
   <canvas id="mini" class="caixa" aria-label="Mapa inteiro: toque para ir até um lugar"></canvas>
   <div id="medidor" class="caixa"></div>
   <div id="carregando" class="caixa">Plantando o capim…</div>
-  <script src="layout.js?v=40"></script>
-  <script src="grama.js?v=40"></script>
-  <script src="construcoes.js?v=40"></script>
-  <script src="plantas.js?v=40"></script>
-  <script src="currais.js?v=40"></script>
-  <script src="animais.js?v=40"></script>
-  <script src="jogo.js?v=40"></script>
-  <script src="decor.js?v=40"></script>
-  <script src="caminhao.js?v=40"></script>
-  <script src="som.js?v=40"></script>
-  <script src="clima.js?v=40"></script>
-  <script src="trabalhadores.js?v=40"></script>
-  <script src="mapa.js?v=40"></script>
+  <script src="layout.js?v=41"></script>
+  <script src="grama.js?v=41"></script>
+  <script src="construcoes.js?v=41"></script>
+  <script src="plantas.js?v=41"></script>
+  <script src="currais.js?v=41"></script>
+  <script src="animais.js?v=41"></script>
+  <script src="jogo.js?v=41"></script>
+  <script src="decor.js?v=41"></script>
+  <script src="caminhao.js?v=41"></script>
+  <script src="som.js?v=41"></script>
+  <script src="clima.js?v=41"></script>
+  <script src="trabalhadores.js?v=41"></script>
+  <script src="mapa.js?v=41"></script>
 </body>
 </html>
